@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export default function DashboardLayout({
     children,
@@ -7,12 +8,12 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-screen overflow-hidden bg-mesh">
             <Sidebar />
             <div className="flex flex-1 flex-col overflow-hidden">
                 <Header />
                 <main className="flex-1 overflow-y-auto p-6">
-                    {children}
+                    <ErrorBoundary>{children}</ErrorBoundary>
                 </main>
             </div>
         </div>

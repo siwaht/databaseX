@@ -1,94 +1,185 @@
-```typescript
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { useStore } from "@/store";
 import { ConnectionCard } from "@/components/connections/ConnectionCard";
 import { ConnectionForm } from "@/components/connections/ConnectionForm";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Database } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
 } from "@/components/ui/dialog";
 import { ConnectionConfig } from "@/types/connections";
 
+const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: { staggerChildren: 0.08 },
+    },
+};
+
+const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 },
+};
+
 export default function ConnectionsPage() {
-  const { connections, addConnection, removeConnection } = useStore();
-  const [open, setOpen] = useState(false);
+    // Access store state and actions separately
+    const connections = useStore((state) => state.connections);
+    const addConnection = useStore((state) => state.addConnection);
+    const removeConnection = useStore((state) => state.removeConnection);
+    const updateConnection = useStore((state) => state.updateConnection);
 
-  const handleEdit = (id: string) => {
-    console.log("Edit connection", id);
-  };
+    const [open, setOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+    const [syncingId, setSyncingId] = useState<string | null>(null);
 
-  const handleSync = (id: string) => {
-    console.log("Sync connection", id);
-  };
+    const handleEdit = useCallback((id: string) => {
+        toast.info("Edit functionality", {
+            description: "Connection editing will be available soon.",
+        });
+    }, []);
 
-  const handleAddConnection = (data: Partial<ConnectionConfig>) => {
-    addConnection({
-      id: Math.random().toString(36).substring(7),
-      ...data,
-    } as ConnectionConfig);
-    setOpen(false);
-  };
+    const handleSync = useCallback(
+        async (id: string) => {
+            setSyncingId(id);
+            const connection = connections.find((c) => c.id === id);
+            const toastId = toast.loading(`Syncing ${connection?.name || "connection"}...`);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Connections</h2>
-          <p className="text-muted-foreground">
-            Manage your vector database connections and integrations.
-          </p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Connection
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Connection</DialogTitle>
-              <DialogDescription>
-                Connect to a new vector database instance.
-              </DialogDescription>
-            </DialogHeader>
-            <ConnectionForm onSubmit={handleAddConnection} onCancel={() => setOpen(false)} />
-          </DialogContent>
-        </Dialog>
-      </div>
+            // Simulate sync delay
+            await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {connections.map((connection) => (
-          <ConnectionCard
-            key={connection.id}
-            connection={connection}
-            onDelete={removeConnection}
-            onEdit={handleEdit}
-            onSync={handleSync}
-          />
-        ))}
-        {connections.length === 0 && (
-          <div className="col-span-full flex h-[450px] flex-col items-center justify-center rounded-md border border-dashed text-center">
-            <h3 className="mt-4 text-lg font-semibold">No connections found</h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Get started by adding your first vector database connection.
-            </p>
-            <Button onClick={() => setOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Connection
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+            updateConnection(id, { lastSync: new Date(), status: "connected" });
+            setSyncingId(null);
+            toast.success("Sync complete", {
+                id: toastId,
+                description: `${connection?.name} is now up to date.`,
+            });
+        },
+        [connections, updateConnection]
+    );
+
+    const handleDeleteConfirm = useCallback(() => {
+        if (!deleteTarget) return;
+
+        const connection = connections.find((c) => c.id === deleteTarget);
+        removeConnection(deleteTarget);
+        toast.success("Connection removed", {
+            description: `"${connection?.name}" has been disconnected.`,
+        });
+        setDeleteTarget(null);
+    }, [deleteTarget, connections, removeConnection]);
+
+    const handleAddConnection = useCallback(
+        (data: Partial<ConnectionConfig>) => {
+            const newConnection = {
+                id: crypto.randomUUID(),
+                ...data,
+            } as ConnectionConfig;
+
+            addConnection(newConnection);
+            setOpen(false);
+            toast.success("Connection added", {
+                description: `Successfully connected to "${data.name}".`,
+            });
+        },
+        [addConnection]
+    );
+
+    return (
+        <>
+            <motion.div
+                className="space-y-6"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+            >
+                <motion.div
+                    variants={itemVariants}
+                    className="flex items-center justify-between"
+                >
+                    <div>
+                        <h2 className="text-3xl font-bold tracking-tight">Connections</h2>
+                        <p className="text-muted-foreground">
+                            Manage your vector database connections and integrations.
+                        </p>
+                    </div>
+                    <Dialog open={open} onOpenChange={setOpen}>
+                        <DialogTrigger asChild>
+                            <Button>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Connection
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Add Connection</DialogTitle>
+                                <DialogDescription>
+                                    Connect to a new vector database instance.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <ConnectionForm
+                                onSubmit={handleAddConnection}
+                                onCancel={() => setOpen(false)}
+                            />
+                        </DialogContent>
+                    </Dialog>
+                </motion.div>
+
+                <motion.div
+                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+                    variants={containerVariants}
+                >
+                    {connections.map((connection) => (
+                        <motion.div key={connection.id} variants={itemVariants}>
+                            <ConnectionCard
+                                connection={connection}
+                                onDelete={(id) => setDeleteTarget(id)}
+                                onEdit={handleEdit}
+                                onSync={handleSync}
+                                isSyncing={syncingId === connection.id}
+                            />
+                        </motion.div>
+                    ))}
+                    {connections.length === 0 && (
+                        <motion.div
+                            variants={itemVariants}
+                            className="col-span-full flex h-[450px] flex-col items-center justify-center rounded-lg border border-dashed text-center"
+                        >
+                            <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                                <Database className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                            <h3 className="text-lg font-semibold">No connections found</h3>
+                            <p className="mb-6 text-sm text-muted-foreground max-w-sm">
+                                Get started by adding your first vector database connection.
+                            </p>
+                            <Button onClick={() => setOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Connection
+                            </Button>
+                        </motion.div>
+                    )}
+                </motion.div>
+            </motion.div>
+
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onOpenChange={(open) => !open && setDeleteTarget(null)}
+                title="Remove Connection"
+                description="Are you sure you want to remove this connection? You can reconnect at any time."
+                confirmText="Remove"
+                variant="destructive"
+                onConfirm={handleDeleteConfirm}
+            />
+        </>
+    );
 }
-```

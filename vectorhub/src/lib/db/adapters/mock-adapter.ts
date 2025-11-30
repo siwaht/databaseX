@@ -23,6 +23,21 @@ export class MockAdapter implements VectorDBAdapter {
         this.type = type;
     }
 
+    private matchesFilter(metadata: Record<string, any>, filter?: MetadataFilter): boolean {
+        if (!filter) return true;
+
+        return Object.entries(filter).every(([key, value]) => {
+            const current = (metadata ?? {})[key];
+
+            if (Array.isArray(value)) {
+                if (!Array.isArray(current)) return false;
+                return value.every((v) => current.includes(v));
+            }
+
+            return current === value;
+        });
+    }
+
     async connect(config: ConnectionConfig): Promise<void> {
         console.log(`Mock connecting to ${config.name}...`);
         await new Promise(resolve => setTimeout(resolve, 500)); // Simulate latency
@@ -106,7 +121,22 @@ export class MockAdapter implements VectorDBAdapter {
     }
 
     async updateDocuments(collection: string, documents: Partial<VectorDocument>[]): Promise<void> {
-        // Mock update
+        const col = this.collections.get(collection);
+        if (!col) throw new Error(`Collection ${collection} not found`);
+
+        const updatesById = new Map(
+            documents
+                .filter((doc): doc is Partial<VectorDocument> & { id: string } => typeof doc.id === 'string')
+                .map((doc) => [doc.id, doc])
+        );
+
+        if (updatesById.size === 0) return;
+
+        col.documents = col.documents.map((existing) => {
+            if (!existing.id) return existing;
+            const update = updatesById.get(existing.id);
+            return update ? { ...existing, ...update } : existing;
+        });
     }
 
     async deleteDocuments(collection: string, ids: string[]): Promise<void> {
@@ -119,19 +149,44 @@ export class MockAdapter implements VectorDBAdapter {
     async countDocuments(collection: string, filter?: MetadataFilter): Promise<number> {
         const col = this.collections.get(collection);
         if (!col) throw new Error(`Collection ${collection} not found`);
-        return col.documents.length;
+
+        if (!filter) return col.documents.length;
+
+        return col.documents.filter((doc) => this.matchesFilter(doc.metadata, filter)).length;
     }
 
     async search(collection: string, query: SearchQuery): Promise<SearchResult[]> {
         const col = this.collections.get(collection);
         if (!col) throw new Error(`Collection ${collection} not found`);
 
-        // Mock search: return random documents with fake scores
-        return col.documents.slice(0, query.topK).map(doc => ({
+        const text = query.text?.toLowerCase().trim();
+
+        const filteredDocuments = col.documents.filter((doc) => {
+            if (!this.matchesFilter(doc.metadata, query.filter)) {
+                return false;
+            }
+
+            if (!text) return true;
+
+            const contentMatch = doc.content.toLowerCase().includes(text);
+            const source = (doc.metadata?.source as string | undefined)?.toLowerCase();
+            const sourceMatch = source ? source.includes(text) : false;
+
+            return contentMatch || sourceMatch;
+        });
+
+        const scored = filteredDocuments.map<SearchResult>((doc) => ({
             id: doc.id!,
-            score: 0.8 + Math.random() * 0.2,
+            score: 0.7 + Math.random() * 0.3, // Mock score between 0.7 and 1.0
             content: query.includeContent ? doc.content : undefined,
-            metadata: query.includeMetadata ? doc.metadata : undefined
+            metadata: query.includeMetadata ? doc.metadata : undefined,
         }));
+
+        const threshold = query.minScore ?? 0;
+
+        return scored
+            .filter((result) => result.score >= threshold)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, query.topK);
     }
 }
