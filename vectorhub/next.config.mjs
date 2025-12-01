@@ -79,6 +79,7 @@ const nextConfig = {
             "@radix-ui/react-select",
             "@radix-ui/react-tabs",
         ],
+        serverComponentsExternalPackages: ["pdf-parse", "mammoth"],
     },
 };
 
