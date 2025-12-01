@@ -91,7 +91,7 @@ export default function SettingsPage() {
                                 <div className="space-y-0.5">
                                     <Label>Theme</Label>
                                     <p className="text-sm text-muted-foreground">
-                                        Select your preferred color theme
+                                        Choose between light or dark mode
                                     </p>
                                 </div>
                                 <Select value={theme} onValueChange={setTheme}>
@@ -101,7 +101,6 @@ export default function SettingsPage() {
                                     <SelectContent>
                                         <SelectItem value="light">Light</SelectItem>
                                         <SelectItem value="dark">Dark</SelectItem>
-                                        <SelectItem value="system">System</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
