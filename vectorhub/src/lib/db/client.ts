@@ -1,8 +1,6 @@
 import { MockAdapter } from "./adapters/mock-adapter";
 import { WebhookAdapter } from "./adapters/webhook-adapter";
 import { MCPAdapter } from "./adapters/mcp-adapter";
-import { MongoDBAdapter } from "./adapters/mongodb-adapter";
-import { SupabaseAdapter } from "./adapters/supabase-adapter";
 import type {
     VectorDBAdapter,
     CreateCollectionConfig,
@@ -22,10 +20,6 @@ function createAdapter(type: VectorDBType): VectorDBAdapter {
             return new WebhookAdapter();
         case "mcp":
             return new MCPAdapter();
-        case "mongodb_atlas":
-            return new MongoDBAdapter();
-        case "supabase":
-            return new SupabaseAdapter();
         default:
             return new MockAdapter();
     }
