@@ -202,33 +202,52 @@ async function callHttpAgent(
     }
     
     // Step 2: Find a suitable tool to call
-    // Look for tools that seem related to chat/query/message
-    const chatToolNames = ["chat", "message", "ask", "query", "send_message", "process", "execute", "run"];
-    let toolToUse = tools.find(t => chatToolNames.some(name => t.name.toLowerCase().includes(name)));
+    // First, look for any tool (n8n workflows become tools with workflow names)
+    let toolToUse = tools.length > 0 ? tools[0] : null;
     
-    // If no chat tool found, use the first available tool
-    if (!toolToUse && tools.length > 0) {
-        toolToUse = tools[0];
+    // If multiple tools, prefer ones that seem related to chat/query/AI
+    if (tools.length > 1) {
+        const preferredNames = ["chat", "message", "ask", "query", "ai", "assistant", "agent", "test"];
+        const preferred = tools.find(t => preferredNames.some(name => t.name.toLowerCase().includes(name)));
+        if (preferred) {
+            toolToUse = preferred;
+        }
     }
     
     // Step 3: Call the tool or try alternative methods
     if (toolToUse) {
         logger.info(`Calling tool: ${toolToUse.name}`);
         
+        // Try calling with various argument formats that n8n workflows might expect
+        const toolArgs: Record<string, unknown> = {};
+        
+        // Add the query in multiple common field names
+        toolArgs.message = query;
+        toolArgs.query = query;
+        toolArgs.text = query;
+        toolArgs.input = query;
+        toolArgs.prompt = query;
+        toolArgs.question = query;
+        
+        // Add context if available
+        if (context.length > 0) {
+            toolArgs.context = context.map(c => c.content).join("\n\n");
+            toolArgs.documents = context.map(c => ({
+                content: c.content,
+                source: c.metadata?.source,
+                score: c.score,
+            }));
+        }
+        
         const toolResponse = await mcpRequest(url, "tools/call", {
             name: toolToUse.name,
-            arguments: {
-                message: query,
-                query: query,
-                text: query,
-                input: query,
-                content: query,
-                context: context.length > 0 ? context.map(c => c.content).join("\n\n") : undefined,
-            },
+            arguments: toolArgs,
         }, headers);
         
         if (toolResponse.error) {
-            throw new Error(toolResponse.error.message || "Tool call failed");
+            // If the tool call failed, show available tools
+            const toolList = tools.map(t => `- **${t.name}**${t.description ? `: ${t.description}` : ""}`).join("\n");
+            throw new Error(`Tool "${toolToUse.name}" failed: ${toolResponse.error.message}\n\nAvailable tools:\n${toolList}`);
         }
         
         // Parse tool response
@@ -240,7 +259,17 @@ async function callHttpAgent(
             return typeof result.content === "string" ? result.content : JSON.stringify(result.content);
         }
         
-        return JSON.stringify(result, null, 2);
+        // Return stringified result
+        if (result) {
+            return typeof result === "string" ? result : JSON.stringify(result, null, 2);
+        }
+        
+        return "Tool executed successfully but returned no content.";
+    }
+    
+    // No tools available - list what we found
+    if (tools.length === 0) {
+        logger.warn("No MCP tools found on server");
     }
     
     // No tools available - try simple webhook format
