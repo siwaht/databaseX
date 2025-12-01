@@ -13,6 +13,12 @@ export class FirecrawlClient {
 
     constructor(apiKey?: string) {
         this.apiKey = apiKey || process.env.FIRECRAWL_API_KEY || "";
+        // Debug logging
+        if (!this.apiKey) {
+            console.warn("FirecrawlClient: API key is missing. Checked process.env.FIRECRAWL_API_KEY");
+        } else {
+            console.log("FirecrawlClient: API key initialized successfully");
+        }
     }
 
     async scrapeUrl(url: string): Promise<FirecrawlScrapeResponse> {
