@@ -41,6 +41,7 @@ export interface AIAgent {
     name: string;
     type: "mcp" | "webhook" | "mock";
     endpoint?: string;
+    authHeader?: string;
     status: "connected" | "disconnected" | "error";
 }
 

@@ -58,8 +58,52 @@ export default function SearchPage() {
     // Helper to extract HTTP endpoint from any config
     const getHttpEndpoint = (config: any): string => {
         if (!config) return "";
-        // Check all possible URL fields in order of preference
-        return config.webhookUrl || config.url || config.baseUrl || config.endpoint || "";
+        
+        // Check direct URL fields first
+        if (config.webhookUrl) return config.webhookUrl;
+        if (config.url) return config.url;
+        if (config.baseUrl) return config.baseUrl;
+        if (config.endpoint) return config.endpoint;
+        
+        // Check for supergateway pattern in args (extracts --streamableHttp URL)
+        if (config.args && Array.isArray(config.args)) {
+            const args = config.args as string[];
+            const streamableIndex = args.findIndex((arg: string) => 
+                arg === "--streamableHttp" || arg === "--sse"
+            );
+            if (streamableIndex !== -1 && args[streamableIndex + 1]) {
+                return args[streamableIndex + 1];
+            }
+            // Also check for URLs directly in args
+            const urlArg = args.find((arg: string) => 
+                arg.startsWith("http://") || arg.startsWith("https://")
+            );
+            if (urlArg) return urlArg;
+        }
+        
+        return "";
+    };
+    
+    // Helper to extract auth header from supergateway config
+    const getAuthHeader = (config: any): string | undefined => {
+        if (!config) return undefined;
+        if (config.authToken) return config.authToken;
+        
+        // Check for --header in args
+        if (config.args && Array.isArray(config.args)) {
+            const args = config.args as string[];
+            const headerIndex = args.findIndex((arg: string) => arg === "--header");
+            if (headerIndex !== -1 && args[headerIndex + 1]) {
+                const headerValue = args[headerIndex + 1];
+                // Extract bearer token from "authorization:Bearer xxx"
+                if (headerValue.toLowerCase().startsWith("authorization:")) {
+                    return headerValue.split(":").slice(1).join(":");
+                }
+                return headerValue;
+            }
+        }
+        
+        return undefined;
     };
 
     // Build agents list from:
@@ -74,6 +118,7 @@ export default function SearchPage() {
                 name: mcp.name,
                 type: "mcp" as const,
                 endpoint: getHttpEndpoint(mcp.config),
+                authHeader: getAuthHeader(mcp.config),
                 status: mcp.status,
             })),
         // Webhook connections from main connections array
@@ -84,6 +129,7 @@ export default function SearchPage() {
                 name: webhook.name,
                 type: "webhook" as const,
                 endpoint: getHttpEndpoint(webhook.config),
+                authHeader: getAuthHeader(webhook.config),
                 status: webhook.status,
             })),
         // Legacy mcpConnections array
@@ -144,6 +190,7 @@ export default function SearchPage() {
                             ? {
                                   type: agent.type,
                                   endpoint: agent.endpoint,
+                                  authHeader: agent.authHeader,
                                   name: agent.name,
                                   config: getAgentConfig(agent),
                               }

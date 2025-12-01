@@ -11,6 +11,7 @@ interface RAGRequest {
     agent?: {
         type: "mcp" | "webhook" | "mock";
         endpoint?: string;
+        authHeader?: string;
         name?: string;
         config?: {
             type?: "stdio" | "sse";
@@ -18,6 +19,8 @@ interface RAGRequest {
             args?: string[];
             url?: string;
             baseUrl?: string;
+            webhookUrl?: string;
+            authToken?: string;
         };
     };
 }
@@ -130,16 +133,27 @@ async function callHttpAgent(
     url: string,
     query: string,
     context: SearchResult[],
-    agentName: string
+    agentName: string,
+    authHeader?: string
 ): Promise<string> {
     logger.info(`Calling HTTP agent: ${agentName} at ${url}`);
     
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    };
+    
+    // Add authorization header if provided
+    if (authHeader) {
+        // Handle both "Bearer xxx" and just "xxx" formats
+        headers["Authorization"] = authHeader.startsWith("Bearer ") 
+            ? authHeader 
+            : `Bearer ${authHeader}`;
+    }
+    
     const response = await fetch(url, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
+        headers,
         body: JSON.stringify({
             // Send in multiple formats for compatibility with different platforms
             query,
@@ -187,6 +201,63 @@ async function callHttpAgent(
     return JSON.stringify(data, null, 2);
 }
 
+// Extract HTTP URL from config (handles supergateway and other patterns)
+function extractHttpUrl(agent: RAGRequest["agent"]): string | undefined {
+    if (!agent) return undefined;
+    
+    // Direct endpoint
+    if (agent.endpoint) return agent.endpoint;
+    
+    // Config URL fields
+    if (agent.config?.webhookUrl) return agent.config.webhookUrl;
+    if (agent.config?.url) return agent.config.url;
+    if (agent.config?.baseUrl) return agent.config.baseUrl;
+    
+    // Extract from supergateway args
+    if (agent.config?.args && Array.isArray(agent.config.args)) {
+        const args = agent.config.args;
+        
+        // Look for --streamableHttp or --sse followed by URL
+        const streamableIndex = args.findIndex((arg: string) => 
+            arg === "--streamableHttp" || arg === "--sse"
+        );
+        if (streamableIndex !== -1 && args[streamableIndex + 1]) {
+            return args[streamableIndex + 1];
+        }
+        
+        // Look for any URL in args
+        const urlArg = args.find((arg: string) => 
+            arg.startsWith("http://") || arg.startsWith("https://")
+        );
+        if (urlArg) return urlArg;
+    }
+    
+    return undefined;
+}
+
+// Extract auth header from config
+function extractAuthHeader(agent: RAGRequest["agent"]): string | undefined {
+    if (!agent) return undefined;
+    
+    // Direct auth header
+    if (agent.authHeader) return agent.authHeader;
+    if (agent.config?.authToken) return agent.config.authToken;
+    
+    // Extract from supergateway args (--header authorization:Bearer xxx)
+    if (agent.config?.args && Array.isArray(agent.config.args)) {
+        const args = agent.config.args;
+        const headerIndex = args.findIndex((arg: string) => arg === "--header");
+        if (headerIndex !== -1 && args[headerIndex + 1]) {
+            const headerValue = args[headerIndex + 1];
+            if (headerValue.toLowerCase().startsWith("authorization:")) {
+                return headerValue.split(":").slice(1).join(":").trim();
+            }
+        }
+    }
+    
+    return undefined;
+}
+
 export async function POST(request: Request) {
     try {
         const body: RAGRequest = await request.json();
@@ -232,12 +303,14 @@ export async function POST(request: Request) {
             response = generateResponse(query, context, "Vector Search");
             agentUsed = "Vector Search";
         } else {
-            // For both webhook and MCP types, try to call the HTTP endpoint
-            const endpoint = agent.endpoint || agent.config?.url || agent.config?.baseUrl;
+            // Extract endpoint and auth from agent config
+            const endpoint = extractHttpUrl(agent);
+            const authHeader = extractAuthHeader(agent);
             
             if (endpoint) {
                 try {
-                    response = await callHttpAgent(endpoint, query, context, agentName);
+                    logger.info(`Calling agent ${agentName} at ${endpoint} (auth: ${authHeader ? "yes" : "no"})`);
+                    response = await callHttpAgent(endpoint, query, context, agentName, authHeader);
                     agentUsed = agentName;
                 } catch (err) {
                     const errorMsg = err instanceof Error ? err.message : "Unknown error";
