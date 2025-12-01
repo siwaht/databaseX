@@ -64,7 +64,8 @@ export default function CollectionsPage() {
         return () => {
             mounted = false;
         };
-    }, []); // Empty dependency array - only run once on mount
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Only run on mount - setCollections is stable from Zustand
 
     const handleCreate = useCallback(
         async (config: CreateCollectionConfig) => {
