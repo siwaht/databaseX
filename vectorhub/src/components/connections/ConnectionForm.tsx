@@ -384,108 +384,112 @@ export function ConnectionForm({ onSubmit, onCancel }: ConnectionFormProps) {
     }
 
     return (
-        <form onSubmit={(e) => { e.preventDefault(); handleTestConnection(); }} className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="name">Connection Name</Label>
-                <Input
-                    id="name"
-                    placeholder="My Vector DB"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                />
-            </div>
+        <form onSubmit={(e) => { e.preventDefault(); handleTestConnection(); }} className="flex flex-col h-full max-h-[70vh]">
+            <ScrollArea className="flex-1 pr-4">
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Connection Name</Label>
+                        <Input
+                            id="name"
+                            placeholder="My Vector DB"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                        />
+                    </div>
 
-            <div className="space-y-2">
-                <Label htmlFor="type">Database Type</Label>
-                <Select value={type} onValueChange={(v) => handleTypeChange(v as VectorDBType)}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select database type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <ScrollArea className="h-[300px]">
-                            {databaseOptions.map((category) => (
-                                <SelectGroup key={category.category}>
-                                    <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wide py-2">
-                                        {category.category}
-                                    </SelectLabel>
-                                    {category.databases.map((db) => (
-                                        <SelectItem key={db.value} value={db.value} className="py-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium">{db.label}</span>
-                                                {db.badge && (
-                                                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                                                        {db.badge}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </SelectItem>
+                    <div className="space-y-2">
+                        <Label htmlFor="type">Database Type</Label>
+                        <Select value={type} onValueChange={(v) => handleTypeChange(v as VectorDBType)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select database type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <ScrollArea className="h-[300px]">
+                                    {databaseOptions.map((category) => (
+                                        <SelectGroup key={category.category}>
+                                            <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wide py-2">
+                                                {category.category}
+                                            </SelectLabel>
+                                            {category.databases.map((db) => (
+                                                <SelectItem key={db.value} value={db.value} className="py-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-medium">{db.label}</span>
+                                                        {db.badge && (
+                                                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                                                                {db.badge}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
                                     ))}
-                                </SelectGroup>
-                            ))}
-                        </ScrollArea>
-                    </SelectContent>
-                </Select>
-                {selectedDb && (
-                    <p className="text-xs text-muted-foreground mt-1">{selectedDb.description}</p>
-                )}
-            </div>
-
-            <div className="space-y-4 pt-2">
-                {fields.map((field) => (
-                    <div key={field.name} className="space-y-2">
-                        {field.type === "switch" ? (
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor={field.name}>{field.label}</Label>
-                                <Switch
-                                    id={field.name}
-                                    checked={!!configValues[field.name]}
-                                    onCheckedChange={(checked) => handleConfigChange(field.name, checked)}
-                                />
-                            </div>
-                        ) : field.type === "select" ? (
-                            <>
-                                <Label htmlFor={field.name}>
-                                    {field.label}
-                                    {field.required && <span className="text-destructive ml-1">*</span>}
-                                </Label>
-                                <Select
-                                    value={(configValues[field.name] as string) || ""}
-                                    onValueChange={(v) => handleConfigChange(field.name, v)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {field.options?.map((opt) => (
-                                            <SelectItem key={opt} value={opt}>
-                                                {opt}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </>
-                        ) : (
-                            <>
-                                <Label htmlFor={field.name}>
-                                    {field.label}
-                                    {field.required && <span className="text-destructive ml-1">*</span>}
-                                </Label>
-                                <Input
-                                    id={field.name}
-                                    type={field.type}
-                                    placeholder={field.placeholder}
-                                    value={(configValues[field.name] as string) || ""}
-                                    onChange={(e) => handleConfigChange(field.name, e.target.value)}
-                                    required={field.required}
-                                />
-                            </>
+                                </ScrollArea>
+                            </SelectContent>
+                        </Select>
+                        {selectedDb && (
+                            <p className="text-xs text-muted-foreground mt-1">{selectedDb.description}</p>
                         )}
                     </div>
-                ))}
-            </div>
 
-            <div className="flex justify-end space-x-2 pt-4">
+                    <div className="space-y-4 pt-2">
+                        {fields.map((field) => (
+                            <div key={field.name} className="space-y-2">
+                                {field.type === "switch" ? (
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor={field.name}>{field.label}</Label>
+                                        <Switch
+                                            id={field.name}
+                                            checked={!!configValues[field.name]}
+                                            onCheckedChange={(checked) => handleConfigChange(field.name, checked)}
+                                        />
+                                    </div>
+                                ) : field.type === "select" ? (
+                                    <>
+                                        <Label htmlFor={field.name}>
+                                            {field.label}
+                                            {field.required && <span className="text-destructive ml-1">*</span>}
+                                        </Label>
+                                        <Select
+                                            value={(configValues[field.name] as string) || ""}
+                                            onValueChange={(v) => handleConfigChange(field.name, v)}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {field.options?.map((opt) => (
+                                                    <SelectItem key={opt} value={opt}>
+                                                        {opt}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Label htmlFor={field.name}>
+                                            {field.label}
+                                            {field.required && <span className="text-destructive ml-1">*</span>}
+                                        </Label>
+                                        <Input
+                                            id={field.name}
+                                            type={field.type}
+                                            placeholder={field.placeholder}
+                                            value={(configValues[field.name] as string) || ""}
+                                            onChange={(e) => handleConfigChange(field.name, e.target.value)}
+                                            required={field.required}
+                                        />
+                                    </>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </ScrollArea>
+
+            <div className="flex justify-end space-x-2 pt-4 border-t mt-4 flex-shrink-0">
                 <Button variant="outline" type="button" onClick={onCancel}>
                     Cancel
                 </Button>

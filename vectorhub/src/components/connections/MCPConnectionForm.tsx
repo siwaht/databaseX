@@ -439,10 +439,10 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full max-h-[70vh]">
             {/* Input Mode Toggle */}
-            <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as "form" | "json")}>
-                <TabsList className="grid w-full grid-cols-2">
+            <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as "form" | "json")} className="flex flex-col flex-1 min-h-0">
+                <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
                     <TabsTrigger value="form" className="flex items-center gap-2">
                         <Terminal className="h-4 w-4" />
                         Form
@@ -453,7 +453,9 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
                     </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="form" className="space-y-4 mt-4">
+                <TabsContent value="form" className="flex-1 min-h-0 mt-4">
+                    <ScrollArea className="h-[calc(70vh-180px)] pr-4">
+                        <div className="space-y-4">
                     {/* Templates */}
                     <div className="space-y-2">
                         <Label className="text-sm font-medium">Quick Start Templates</Label>
@@ -710,9 +712,13 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
                             </pre>
                         </div>
                     )}
+                        </div>
+                    </ScrollArea>
                 </TabsContent>
 
-                <TabsContent value="json" className="space-y-4 mt-4">
+                <TabsContent value="json" className="flex-1 min-h-0 mt-4">
+                    <ScrollArea className="h-[calc(70vh-180px)] pr-4">
+                        <div className="space-y-4">
                     <div className="rounded-md bg-muted/50 p-3 flex items-start gap-2">
                         <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                         <p className="text-xs text-muted-foreground">
@@ -772,10 +778,12 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
                             required
                         />
                     </div>
+                        </div>
+                    </ScrollArea>
                 </TabsContent>
             </Tabs>
 
-            <div className="flex justify-end space-x-2 pt-4 border-t">
+            <div className="flex justify-end space-x-2 pt-4 border-t flex-shrink-0">
                 <Button variant="outline" type="button" onClick={onCancel}>
                     Cancel
                 </Button>

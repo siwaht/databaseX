@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface WebhookConnectionFormProps {
     onSubmit: (data: Partial<ConnectionConfig>) => void;
@@ -60,30 +61,32 @@ export function WebhookConnectionForm({ onSubmit, onCancel }: WebhookConnectionF
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="name">Connection Name</Label>
-                <Input
-                    id="name"
-                    placeholder="My Webhook Connection"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                />
-            </div>
+        <form onSubmit={handleSubmit} className="flex flex-col h-full max-h-[70vh]">
+            <ScrollArea className="flex-1 pr-4">
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Connection Name</Label>
+                        <Input
+                            id="name"
+                            placeholder="My Webhook Connection"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                        />
+                    </div>
 
-            <div className="space-y-2">
-                <Label htmlFor="baseUrl">Base URL</Label>
-                <Input
-                    id="baseUrl"
-                    placeholder="https://api.example.com"
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    required
-                />
-            </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="baseUrl">Base URL</Label>
+                        <Input
+                            id="baseUrl"
+                            placeholder="https://api.example.com"
+                            value={baseUrl}
+                            onChange={(e) => setBaseUrl(e.target.value)}
+                            required
+                        />
+                    </div>
 
-            <Tabs defaultValue="auth" className="w-full">
+                    <Tabs defaultValue="auth" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="auth">Authentication</TabsTrigger>
                     <TabsTrigger value="endpoints">Endpoints</TabsTrigger>
@@ -199,9 +202,11 @@ export function WebhookConnectionForm({ onSubmit, onCancel }: WebhookConnectionF
                         />
                     </div>
                 </TabsContent>
-            </Tabs>
+                    </Tabs>
+                </div>
+            </ScrollArea>
 
-            <div className="flex justify-end space-x-2 pt-4">
+            <div className="flex justify-end space-x-2 pt-4 border-t mt-4 flex-shrink-0">
                 <Button variant="outline" type="button" onClick={onCancel}>
                     Cancel
                 </Button>
