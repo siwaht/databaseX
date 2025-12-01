@@ -81,22 +81,46 @@ async function fetchConnectionDetails(connection: ConnectionConfig): Promise<{
     stats: ConnectionStats;
     serverInfo: Record<string, string>;
 }> {
-    // Fetch real collections from the database
     let fetchedCollections: CollectionInfo[] = [];
     
-    try {
-        const apiCollections = await listCollectionsApi(connection);
-        fetchedCollections = apiCollections.map((col) => ({
-            name: col.name,
-            documentCount: col.documentCount || 0,
-            dimensions: col.dimensions,
-            indexType: col.distanceMetric === "cosine" ? "HNSW" : "IVF_FLAT",
-            size: `${((col.documentCount || 0) * 0.05).toFixed(1)} MB`, // Estimate size
+    // Only fetch collections for database connection types
+    const databaseTypes = ["mongodb_atlas", "supabase", "pinecone", "weaviate", "qdrant", "chromadb", "milvus", "redis", "upstash", "neo4j", "elasticsearch", "pgvector"];
+    
+    if (databaseTypes.includes(connection.type)) {
+        try {
+            const apiCollections = await listCollectionsApi(connection);
+            fetchedCollections = apiCollections.map((col) => ({
+                name: col.name,
+                documentCount: col.documentCount || 0,
+                dimensions: col.dimensions,
+                indexType: col.distanceMetric === "cosine" ? "HNSW" : "IVF_FLAT",
+                size: `${((col.documentCount || 0) * 0.05).toFixed(1)} MB`,
+                lastModified: new Date(),
+            }));
+        } catch (error) {
+            console.error("Failed to fetch collections:", error);
+        }
+    } else if (connection.type === "mcp") {
+        // For MCP connections, show tools as "collections"
+        const config = connection.config as Record<string, unknown>;
+        fetchedCollections = [{
+            name: "MCP Tools",
+            documentCount: 0,
+            dimensions: 0,
+            indexType: "MCP",
+            size: "N/A",
             lastModified: new Date(),
-        }));
-    } catch (error) {
-        console.error("Failed to fetch collections:", error);
-        // Return empty array on error
+        }];
+    } else if (connection.type === "webhook") {
+        // For Webhook connections, show endpoint info
+        fetchedCollections = [{
+            name: "Webhook Endpoint",
+            documentCount: 0,
+            dimensions: 0,
+            indexType: "HTTP",
+            size: "N/A",
+            lastModified: new Date(),
+        }];
     }
 
     const totalDocs = fetchedCollections.reduce((acc, c) => acc + c.documentCount, 0);
@@ -104,9 +128,9 @@ async function fetchConnectionDetails(connection: ConnectionConfig): Promise<{
     const stats: ConnectionStats = {
         totalDocuments: totalDocs,
         totalCollections: fetchedCollections.length,
-        storageUsed: `${(totalDocs * 0.0001).toFixed(2)} GB`, // Rough estimate
-        queriesPerDay: 0, // Not available from API
-        avgLatency: 0, // Not available from API
+        storageUsed: `${(totalDocs * 0.0001).toFixed(2)} GB`,
+        queriesPerDay: 0,
+        avgLatency: 0,
         uptime: connection.status === "connected" ? "Online" : "Offline",
     };
 

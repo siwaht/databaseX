@@ -91,7 +91,6 @@ export async function GET(request: Request) {
         const connectionConfig = getConnectionConfig(request);
         
         logger.info("Fetching collections for connection type:", connectionConfig.type);
-        logger.info("Connection config:", JSON.stringify(connectionConfig.config, null, 2));
         
         // Handle different database types
         if (connectionConfig.type === "mongodb_atlas") {
@@ -100,8 +99,28 @@ export async function GET(request: Request) {
             return NextResponse.json(collections);
         }
         
-        // For other types, return empty array (can be extended)
-        logger.warn("Unsupported connection type:", connectionConfig.type);
+        // MCP connections don't have traditional collections
+        if (connectionConfig.type === "mcp") {
+            return NextResponse.json([{
+                name: "MCP Tools",
+                documentCount: 0,
+                dimensions: 0,
+                distanceMetric: "N/A",
+            }]);
+        }
+        
+        // Webhook connections don't have collections
+        if (connectionConfig.type === "webhook") {
+            return NextResponse.json([{
+                name: "Webhook Endpoint",
+                documentCount: 0,
+                dimensions: 0,
+                distanceMetric: "N/A",
+            }]);
+        }
+        
+        // For other database types, return empty array (can be extended)
+        logger.info("Connection type not yet implemented for collections:", connectionConfig.type);
         return NextResponse.json([]);
     } catch (error) {
         logger.error("GET /api/collections failed", error);
