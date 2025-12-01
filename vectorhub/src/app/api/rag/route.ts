@@ -140,7 +140,7 @@ async function callHttpAgent(
     
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "Accept": "application/json",
+        "Accept": "application/json, text/event-stream",
     };
     
     // Add authorization header if provided
@@ -151,26 +151,60 @@ async function callHttpAgent(
             : `Bearer ${authHeader}`;
     }
     
+    // Build MCP-compatible request body
+    const mcpRequest = {
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: {
+            name: "query",
+            arguments: {
+                query,
+                message: query,
+                context: context.map((c) => ({
+                    content: c.content,
+                    score: c.score,
+                    source: c.metadata?.source,
+                })),
+            },
+        },
+    };
+    
     const response = await fetch(url, {
         method: "POST",
         headers,
-        body: JSON.stringify({
-            // Send in multiple formats for compatibility with different platforms
-            query,
-            message: query,
-            prompt: query,
-            text: query,
-            context: context.map((c) => ({
-                content: c.content,
-                score: c.score,
-                relevance: c.score,
-                metadata: c.metadata,
-                source: c.metadata?.source,
-            })),
-            documents: context.map((c) => c.content),
-            timestamp: new Date().toISOString(),
-        }),
+        body: JSON.stringify(mcpRequest),
     });
+
+    // Check if it's an SSE response
+    const contentType = response.headers.get("content-type") || "";
+    
+    if (contentType.includes("text/event-stream")) {
+        // Handle SSE response
+        const text = await response.text();
+        const lines = text.split("\n");
+        let result = "";
+        
+        for (const line of lines) {
+            if (line.startsWith("data: ")) {
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.result?.content) {
+                        result += data.result.content;
+                    } else if (data.content) {
+                        result += typeof data.content === "string" ? data.content : JSON.stringify(data.content);
+                    } else if (data.message) {
+                        result += data.message;
+                    }
+                } catch {
+                    // Not JSON, just append the data
+                    result += line.slice(6);
+                }
+            }
+        }
+        
+        return result || text;
+    }
 
     if (!response.ok) {
         const errorText = await response.text().catch(() => "Unknown error");
@@ -178,6 +212,18 @@ async function callHttpAgent(
     }
 
     const data = await response.json();
+    
+    // Handle MCP JSON-RPC response
+    if (data.jsonrpc && data.result) {
+        const mcpResult = data.result;
+        if (mcpResult.content) {
+            if (Array.isArray(mcpResult.content)) {
+                return mcpResult.content.map((c: any) => c.text || c.content || JSON.stringify(c)).join("\n");
+            }
+            return typeof mcpResult.content === "string" ? mcpResult.content : JSON.stringify(mcpResult.content);
+        }
+        return JSON.stringify(mcpResult, null, 2);
+    }
     
     // Handle various response formats from different platforms
     const result = 
