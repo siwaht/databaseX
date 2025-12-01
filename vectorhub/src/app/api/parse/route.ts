@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+
+export const runtime = 'nodejs';
+
 // @ts-ignore
 import pdf from "pdf-parse";
 // @ts-ignore
