@@ -38,6 +38,7 @@ import {
     Link as LinkIcon,
     FileSpreadsheet,
     FileType,
+    Upload,
 } from "lucide-react";
 
 interface ScrapeJob {
