@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import type { VectorDocument } from "@/lib/db/adapters/base";
 import { addDocumentsApi } from "@/lib/api/documents";
 import { listCollectionsApi } from "@/lib/api/collections";
+import { splitText } from "@/lib/chunking";
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -213,39 +214,70 @@ export default function UploadPage() {
         [selectedSyncConnections, connections]
     );
 
+
+
     const handleFileUpload = useCallback(
-        async (files: File[]) => {
+        async (files: File[], options?: { chunkSize: number; chunkOverlap: number }) => {
             if (!ensureTargetsSelected()) return;
 
             setIsUploading(true);
-            const toastId = toast.loading(`Uploading ${files.length} file(s)...`);
-
-            const docs: VectorDocument[] = files.map((file) => ({
-                id: crypto.randomUUID(),
-                content: `Content of ${file.name}`,
-                metadata: {
-                    source: file.name,
-                    type: file.type,
-                    size: file.size,
-                    created_at: new Date(),
-                    connectionId: selectedConnection,
-                    collectionName: selectedCollection,
-                },
-            }));
+            const toastId = toast.loading(`Processing ${files.length} file(s)...`);
 
             try {
+                const allDocs: VectorDocument[] = [];
+
+                for (const file of files) {
+                    let content = "";
+
+                    // Simple text reading for supported text formats
+                    if (file.type === "text/plain" || file.name.endsWith(".md") || file.name.endsWith(".json") || file.name.endsWith(".csv") || file.name.endsWith(".txt")) {
+                        content = await file.text();
+                    } else {
+                        // For binary files, we'd need server-side processing or client-side libraries
+                        // For now, we'll use a placeholder or warn
+                        content = `[Binary file content placeholder for ${file.name}]`;
+                        // In a real app, you'd upload the file to an endpoint to extract text
+                    }
+
+                    const chunks = options
+                        ? splitText(content, options.chunkSize, options.chunkOverlap)
+                        : [content];
+
+                    chunks.forEach((chunk, i) => {
+                        allDocs.push({
+                            id: crypto.randomUUID(),
+                            content: chunk,
+                            metadata: {
+                                source: file.name,
+                                type: file.type,
+                                size: file.size,
+                                created_at: new Date(),
+                                connectionId: selectedConnection,
+                                collectionName: selectedCollection,
+                                chunkIndex: i,
+                                totalChunks: chunks.length,
+                                originalName: file.name
+                            },
+                        });
+                    });
+                }
+
                 const connection = connections.find((c) => c.id === selectedConnection);
-                const returnedIds = await addDocumentsApi(selectedCollection, docs, connection);
-                docs.forEach((doc, index) => {
+                const returnedIds = await addDocumentsApi(selectedCollection, allDocs, connection);
+
+                // Update store with new docs (might be too many, maybe just add a few or refetch)
+                // For performance, maybe we shouldn't add ALL chunks to the store if there are thousands
+                // But for now, let's stick to the pattern
+                allDocs.forEach((doc, index) => {
                     addDocument({ ...doc, id: returnedIds[index] || doc.id });
                 });
+
                 await syncCollectionsFromDb();
+                await syncToExternalConnections(allDocs, selectedCollection);
 
-                await syncToExternalConnections(docs, selectedCollection);
-
-                toast.success(`${files.length} file(s) uploaded`, {
+                toast.success(`${files.length} file(s) processed`, {
                     id: toastId,
-                    description: `Documents added to "${selectedCollection}".`,
+                    description: `Created ${allDocs.length} chunks in "${selectedCollection}".`,
                 });
             } catch (error) {
                 toast.error("Upload failed", {
@@ -268,36 +300,45 @@ export default function UploadPage() {
     );
 
     const handleTextUpload = useCallback(
-        async (title: string, content: string) => {
+        async (title: string, content: string, options?: { chunkSize: number; chunkOverlap: number }) => {
             if (!ensureTargetsSelected()) return;
 
             setIsUploading(true);
             const toastId = toast.loading("Processing text...");
 
-            const doc: VectorDocument = {
-                id: crypto.randomUUID(),
-                content,
-                metadata: {
-                    source: title,
-                    type: "text/plain",
-                    size: content.length,
-                    created_at: new Date(),
-                    connectionId: selectedConnection,
-                    collectionName: selectedCollection,
-                },
-            };
-
             try {
-                const connection = connections.find((c) => c.id === selectedConnection);
-                const returnedIds = await addDocumentsApi(selectedCollection, [doc], connection);
-                addDocument({ ...doc, id: returnedIds[0] || doc.id });
-                await syncCollectionsFromDb();
+                const chunks = options
+                    ? splitText(content, options.chunkSize, options.chunkOverlap)
+                    : [content];
 
-                await syncToExternalConnections([doc], selectedCollection);
+                const docs: VectorDocument[] = chunks.map((chunk, i) => ({
+                    id: crypto.randomUUID(),
+                    content: chunk,
+                    metadata: {
+                        source: title,
+                        type: "text/plain",
+                        size: content.length,
+                        created_at: new Date(),
+                        connectionId: selectedConnection,
+                        collectionName: selectedCollection,
+                        chunkIndex: i,
+                        totalChunks: chunks.length,
+                    },
+                }));
+
+                const connection = connections.find((c) => c.id === selectedConnection);
+                const returnedIds = await addDocumentsApi(selectedCollection, docs, connection);
+
+                docs.forEach((doc, index) => {
+                    addDocument({ ...doc, id: returnedIds[index] || doc.id });
+                });
+
+                await syncCollectionsFromDb();
+                await syncToExternalConnections(docs, selectedCollection);
 
                 toast.success("Text uploaded", {
                     id: toastId,
-                    description: `"${title}" added to "${selectedCollection}".`,
+                    description: `Created ${docs.length} chunks in "${selectedCollection}".`,
                 });
             } catch (error) {
                 toast.error("Upload failed", {
@@ -320,41 +361,55 @@ export default function UploadPage() {
     );
 
     const handleScrapeUpload = useCallback(
-        async (scrapedDocs: ScrapedDocument[]) => {
+        async (scrapedDocs: ScrapedDocument[], options?: { chunkSize: number; chunkOverlap: number }) => {
             if (!ensureTargetsSelected()) return;
 
             setIsUploading(true);
-            const toastId = toast.loading(`Uploading ${scrapedDocs.length} scraped document(s)...`);
-
-            const docs: VectorDocument[] = scrapedDocs.map((doc) => ({
-                id: doc.id,
-                content: doc.content,
-                metadata: {
-                    source: doc.url,
-                    title: doc.title,
-                    type: doc.metadata.type,
-                    wordCount: doc.metadata.wordCount,
-                    scrapedAt: doc.metadata.scrapedAt,
-                    documentType: doc.metadata.documentType,
-                    created_at: new Date(),
-                    connectionId: selectedConnection,
-                    collectionName: selectedCollection,
-                },
-            }));
+            const toastId = toast.loading(`Processing ${scrapedDocs.length} scraped document(s)...`);
 
             try {
+                const allDocs: VectorDocument[] = [];
+
+                for (const doc of scrapedDocs) {
+                    const chunks = options
+                        ? splitText(doc.content, options.chunkSize, options.chunkOverlap)
+                        : [doc.content];
+
+                    chunks.forEach((chunk, i) => {
+                        allDocs.push({
+                            id: crypto.randomUUID(), // New ID for chunk
+                            content: chunk,
+                            metadata: {
+                                source: doc.url,
+                                title: doc.title,
+                                type: doc.metadata.type,
+                                wordCount: doc.metadata.wordCount,
+                                scrapedAt: doc.metadata.scrapedAt,
+                                documentType: doc.metadata.documentType,
+                                created_at: new Date(),
+                                connectionId: selectedConnection,
+                                collectionName: selectedCollection,
+                                chunkIndex: i,
+                                totalChunks: chunks.length,
+                                originalId: doc.id
+                            },
+                        });
+                    });
+                }
+
                 const connection = connections.find((c) => c.id === selectedConnection);
-                const returnedIds = await addDocumentsApi(selectedCollection, docs, connection);
-                docs.forEach((doc, index) => {
+                const returnedIds = await addDocumentsApi(selectedCollection, allDocs, connection);
+
+                allDocs.forEach((doc, index) => {
                     addDocument({ ...doc, id: returnedIds[index] || doc.id });
                 });
+
                 await syncCollectionsFromDb();
+                await syncToExternalConnections(allDocs, selectedCollection);
 
-                await syncToExternalConnections(docs, selectedCollection);
-
-                toast.success(`${scrapedDocs.length} document(s) uploaded`, {
+                toast.success(`${scrapedDocs.length} document(s) processed`, {
                     id: toastId,
-                    description: `Scraped content added to "${selectedCollection}".`,
+                    description: `Created ${allDocs.length} chunks in "${selectedCollection}".`,
                 });
             } catch (error) {
                 toast.error("Upload failed", {

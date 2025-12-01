@@ -1,19 +1,20 @@
-"use client";
-
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, File, X, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AdvancedSettings } from "./AdvancedSettings";
 
 interface UploadZoneProps {
-    onUpload: (files: File[]) => void;
+    onUpload: (files: File[], options?: { chunkSize: number; chunkOverlap: number }) => void;
     disabled?: boolean;
 }
 
 export function UploadZone({ onUpload, disabled = false }: UploadZoneProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [files, setFiles] = useState<File[]>([]);
+    const [chunkSize, setChunkSize] = useState(1000);
+    const [chunkOverlap, setChunkOverlap] = useState(200);
 
     const handleDragOver = useCallback(
         (e: React.DragEvent) => {
@@ -55,7 +56,7 @@ export function UploadZone({ onUpload, disabled = false }: UploadZoneProps) {
 
     const handleUpload = () => {
         if (files.length > 0 && !disabled) {
-            onUpload(files);
+            onUpload(files, { chunkSize, chunkOverlap });
             setFiles([]);
         }
     };
@@ -67,7 +68,7 @@ export function UploadZone({ onUpload, disabled = false }: UploadZoneProps) {
     };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             <div
                 className={cn(
                     "relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-all duration-200",
@@ -114,6 +115,18 @@ export function UploadZone({ onUpload, disabled = false }: UploadZoneProps) {
                     />
                 </div>
             </div>
+
+            <AdvancedSettings
+                options={{
+                    chunkSize,
+                    chunkOverlap,
+                }}
+                onChange={(opts) => {
+                    setChunkSize(opts.chunkSize);
+                    setChunkOverlap(opts.chunkOverlap);
+                }}
+                showParsingOptions={false}
+            />
 
             <AnimatePresence mode="popLayout">
                 {files.length > 0 && (
