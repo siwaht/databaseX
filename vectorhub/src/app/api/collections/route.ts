@@ -18,12 +18,46 @@ const getConnectionConfig = (request: Request): ConnectionConfig => {
 
 // Direct MongoDB connection for listing collections
 async function listMongoDBCollections(config: MongoDBAtlasConfig): Promise<CollectionInfo[]> {
+    logger.info("Connecting to MongoDB with config:", { 
+        database: config.database,
+        hasConnectionString: !!config.connectionString,
+    });
+    
+    if (!config.connectionString) {
+        throw new Error("Missing MongoDB connection string. Please check your connection settings.");
+    }
+    
     const client = new MongoClient(config.connectionString);
     
     try {
         await client.connect();
+        logger.info("Connected to MongoDB successfully");
+        
+        // If no database specified, list available databases for debugging
+        if (!config.database) {
+            const adminDb = client.db().admin();
+            const dbList = await adminDb.listDatabases();
+            const dbNames = dbList.databases.map(d => d.name).join(", ");
+            logger.info(`No database specified. Available databases: ${dbNames}`);
+            throw new Error(`No database name specified. Available databases: ${dbNames}`);
+        }
+        
         const db = client.db(config.database);
         const collections = await db.listCollections().toArray();
+        
+        logger.info(`Found ${collections.length} collections in database "${config.database}"`);
+        
+        // If no collections found, list available databases for debugging
+        if (collections.length === 0) {
+            try {
+                const adminDb = client.db().admin();
+                const dbList = await adminDb.listDatabases();
+                const dbNames = dbList.databases.map(d => d.name).join(", ");
+                logger.info(`Database "${config.database}" has 0 collections. Available databases: ${dbNames}`);
+            } catch {
+                // Ignore if we can't list databases
+            }
+        }
 
         const collectionInfos = await Promise.all(
             collections.map(async (col) => {
@@ -44,6 +78,9 @@ async function listMongoDBCollections(config: MongoDBAtlasConfig): Promise<Colle
         );
 
         return collectionInfos;
+    } catch (error) {
+        logger.error("MongoDB connection/query failed:", error);
+        throw error;
     } finally {
         await client.close();
     }
@@ -53,6 +90,9 @@ export async function GET(request: Request) {
     try {
         const connectionConfig = getConnectionConfig(request);
         
+        logger.info("Fetching collections for connection type:", connectionConfig.type);
+        logger.info("Connection config:", JSON.stringify(connectionConfig.config, null, 2));
+        
         // Handle different database types
         if (connectionConfig.type === "mongodb_atlas") {
             const mongoConfig = connectionConfig.config as MongoDBAtlasConfig;
@@ -61,6 +101,7 @@ export async function GET(request: Request) {
         }
         
         // For other types, return empty array (can be extended)
+        logger.warn("Unsupported connection type:", connectionConfig.type);
         return NextResponse.json([]);
     } catch (error) {
         logger.error("GET /api/collections failed", error);
