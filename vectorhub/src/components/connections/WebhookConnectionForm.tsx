@@ -211,87 +211,96 @@ export function WebhookConnectionForm({ onSubmit, onCancel }: WebhookConnectionF
             <ScrollArea className="flex-1 pr-4">
                 <div className="space-y-4">
                     {/* Platform Selection */}
-                    <div className="space-y-3">
-                        <Label className="text-sm font-medium">Choose Integration Platform</Label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {platforms.map((platform) => (
-                                <button
-                                    key={platform.id}
-                                    type="button"
-                                    onClick={() => handlePlatformSelect(platform.id)}
-                                    className={cn(
-                                        "flex flex-col items-center p-3 rounded-lg border-2 transition-all text-center",
-                                        selectedPlatform === platform.id
-                                            ? platform.color + " border-current"
-                                            : "border-transparent bg-muted/50 hover:bg-muted"
+                    <div className="space-y-2">
+                        <Label>Integration Platform</Label>
+                        <Select 
+                            value={selectedPlatform || ""} 
+                            onValueChange={handlePlatformSelect}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a platform...">
+                                    {selectedPlatform && (
+                                        <span className="flex items-center gap-2">
+                                            <span>{platforms.find(p => p.id === selectedPlatform)?.logo}</span>
+                                            <span>{platforms.find(p => p.id === selectedPlatform)?.name}</span>
+                                        </span>
                                     )}
-                                >
-                                    <span className="text-2xl mb-1">{platform.logo}</span>
-                                    <span className="text-xs font-medium">{platform.name}</span>
-                                </button>
-                            ))}
-                        </div>
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {platforms.map((platform) => (
+                                    <SelectItem key={platform.id} value={platform.id}>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg">{platform.logo}</span>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">{platform.name}</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {platform.description}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Platform Instructions */}
                     {currentPlatform && currentPlatform.id !== "custom" && (
-                        <Card className={cn("border-2", currentPlatform.color)}>
-                            <CardHeader className="pb-2">
+                        <Card className="border">
+                            <CardHeader className="py-3">
                                 <CardTitle className="text-sm flex items-center gap-2">
-                                    <span className="text-lg">{currentPlatform.logo}</span>
+                                    <span>{currentPlatform.logo}</span>
                                     {currentPlatform.name} Setup
                                 </CardTitle>
-                                <CardDescription className="text-xs">
-                                    {currentPlatform.description}
-                                </CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-3">
-                                <div className="space-y-2">
-                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                        Quick Start
-                                    </p>
-                                    <ol className="text-xs space-y-1.5">
-                                        {currentPlatform.instructions.map((step, i) => (
-                                            <li key={i} className="flex items-start gap-2">
-                                                <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] font-medium flex items-center justify-center">
-                                                    {i + 1}
-                                                </span>
-                                                <span className="text-muted-foreground pt-0.5">{step}</span>
-                                            </li>
-                                        ))}
-                                    </ol>
+                            <CardContent className="pt-0 space-y-3">
+                                <ol className="text-xs space-y-2">
+                                    {currentPlatform.instructions.map((step, i) => (
+                                        <li key={i} className="flex items-start gap-2">
+                                            <span className="flex-shrink-0 h-4 w-4 rounded-full bg-primary/10 text-primary text-[10px] font-medium flex items-center justify-center mt-0.5">
+                                                {i + 1}
+                                            </span>
+                                            <span className="text-muted-foreground">{step}</span>
+                                        </li>
+                                    ))}
+                                </ol>
+
+                                <div className="flex items-center gap-3 pt-2">
+                                    {currentPlatform.docsUrl && (
+                                        <a
+                                            href={currentPlatform.docsUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                        >
+                                            View docs
+                                            <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                    )}
                                 </div>
 
-                                {currentPlatform.docsUrl && (
-                                    <a
-                                        href={currentPlatform.docsUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                                    >
-                                        View {currentPlatform.name} docs
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                )}
-
-                                {/* VectorHub Webhook URL */}
-                                <Separator className="my-3" />
-                                <div className="space-y-2">
-                                    <p className="text-xs font-medium">VectorHub Webhook URL (for incoming data)</p>
+                                <Separator />
+                                
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">VectorHub Webhook URL</Label>
                                     <div className="flex gap-2">
-                                        <code className="flex-1 text-xs bg-muted p-2 rounded-md font-mono truncate">
-                                            {exampleWebhookUrl}
-                                        </code>
+                                        <Input
+                                            readOnly
+                                            value={exampleWebhookUrl}
+                                            className="h-8 text-xs font-mono bg-muted"
+                                        />
                                         <Button
                                             type="button"
                                             variant="outline"
                                             size="sm"
+                                            className="h-8 px-2"
                                             onClick={() => copyToClipboard(exampleWebhookUrl, "webhook")}
                                         >
                                             {copied === "webhook" ? (
-                                                <Check className="h-3 w-3" />
+                                                <Check className="h-3.5 w-3.5 text-emerald-500" />
                                             ) : (
-                                                <Copy className="h-3 w-3" />
+                                                <Copy className="h-3.5 w-3.5" />
                                             )}
                                         </Button>
                                     </div>
@@ -490,37 +499,34 @@ export function WebhookConnectionForm({ onSubmit, onCancel }: WebhookConnectionF
 
                     {/* API Documentation */}
                     <Card>
-                        <CardHeader className="pb-2">
+                        <CardHeader className="py-3">
                             <CardTitle className="text-sm flex items-center gap-2">
                                 <Webhook className="h-4 w-4" />
-                                VectorHub API for Automation
+                                VectorHub API Endpoints
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-3 text-xs">
-                            <p className="text-muted-foreground">
-                                You can also call VectorHub&apos;s API directly from your automation platform:
-                            </p>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between bg-muted/50 p-2 rounded-md">
-                                    <div>
-                                        <code className="text-emerald-600 dark:text-emerald-400">POST</code>
-                                        <code className="ml-2">/api/documents</code>
-                                    </div>
-                                    <Badge variant="outline" className="text-[10px]">Add Documents</Badge>
+                        <CardContent className="pt-0">
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                                    <code className="text-xs">
+                                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">POST</span>
+                                        <span className="ml-2 text-muted-foreground">/api/documents</span>
+                                    </code>
+                                    <span className="text-[10px] text-muted-foreground">Add Documents</span>
                                 </div>
-                                <div className="flex items-center justify-between bg-muted/50 p-2 rounded-md">
-                                    <div>
-                                        <code className="text-blue-600 dark:text-blue-400">POST</code>
-                                        <code className="ml-2">/api/search</code>
-                                    </div>
-                                    <Badge variant="outline" className="text-[10px]">Vector Search</Badge>
+                                <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                                    <code className="text-xs">
+                                        <span className="text-blue-600 dark:text-blue-400 font-medium">POST</span>
+                                        <span className="ml-2 text-muted-foreground">/api/search</span>
+                                    </code>
+                                    <span className="text-[10px] text-muted-foreground">Vector Search</span>
                                 </div>
-                                <div className="flex items-center justify-between bg-muted/50 p-2 rounded-md">
-                                    <div>
-                                        <code className="text-amber-600 dark:text-amber-400">POST</code>
-                                        <code className="ml-2">/api/rag</code>
-                                    </div>
-                                    <Badge variant="outline" className="text-[10px]">RAG Query</Badge>
+                                <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                                    <code className="text-xs">
+                                        <span className="text-amber-600 dark:text-amber-400 font-medium">POST</span>
+                                        <span className="ml-2 text-muted-foreground">/api/rag</span>
+                                    </code>
+                                    <span className="text-[10px] text-muted-foreground">RAG Query</span>
                                 </div>
                             </div>
                         </CardContent>
