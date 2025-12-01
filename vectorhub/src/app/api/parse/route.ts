@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 // @ts-ignore
-const pdf = require("pdf-parse");
+import pdf from "pdf-parse";
 // @ts-ignore
-const mammoth = require("mammoth");
+import mammoth from "mammoth";
 
 export async function POST(request: Request) {
     try {
