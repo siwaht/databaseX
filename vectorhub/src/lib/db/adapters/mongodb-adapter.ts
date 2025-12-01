@@ -61,12 +61,30 @@ export class MongoDBAdapter implements VectorDBAdapter {
         const db = this.client.db(this.config.database);
         const collections = await db.listCollections().toArray();
 
-        return collections.map(c => ({
-            name: c.name,
-            dimensions: this.config!.dimensions,
-            distanceMetric: "cosine",
-            documentCount: 0,
-        }));
+        const infos: CollectionInfo[] = [];
+        for (const col of collections) {
+            let count = 0;
+            try {
+                // Try to get fast count from collStats
+                const stats = await db.command({ collStats: col.name });
+                count = stats.count;
+            } catch {
+                // Fallback to countDocuments if collStats fails (e.g. view)
+                try {
+                    count = await db.collection(col.name).countDocuments();
+                } catch (e) {
+                    console.warn(`Failed to count documents for ${col.name}`, e);
+                }
+            }
+
+            infos.push({
+                name: col.name,
+                dimensions: this.config!.dimensions,
+                distanceMetric: "cosine",
+                documentCount: count,
+            });
+        }
+        return infos;
     }
 
     async createCollection(config: CreateCollectionConfig): Promise<CollectionInfo> {
@@ -84,15 +102,19 @@ export class MongoDBAdapter implements VectorDBAdapter {
 
     async getCollection(name: string): Promise<CollectionInfo> {
         if (!this.client || !this.config) throw new Error("Not connected");
+
+        const stats = await this.getCollectionStats(name);
+
         return {
             name,
             dimensions: this.config!.dimensions,
             distanceMetric: "cosine",
-            documentCount: 0,
+            documentCount: stats.vectorCount,
         };
     }
 
     async updateCollection(name: string, updates: UpdateCollectionConfig): Promise<void> {
+        if (!this.client || !this.config) throw new Error("Not connected");
         // MongoDB collections don't strictly need updates for schema
     }
 
@@ -182,8 +204,8 @@ export class MongoDBAdapter implements VectorDBAdapter {
         const pipeline = [
             {
                 $vectorSearch: {
-                    index: this.config.vectorSearchIndexName,
-                    path: this.config.embeddingField,
+                    index: this.config!.vectorSearchIndexName,
+                    path: this.config!.embeddingField,
                     queryVector: query.vector,
                     numCandidates: (query.topK || 10) * 10,
                     limit: query.topK || 10,

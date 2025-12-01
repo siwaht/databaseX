@@ -24,7 +24,7 @@ export class SupabaseAdapter implements VectorDBAdapter {
         this.config = config.config as SupabaseConfig;
         try {
             this.client = createClient(this.config.projectUrl, this.config.anonKey, {
-                db: { schema: this.config.schema || "public" },
+                db: { schema: (this.config.schema || "public") as any },
             });
             this.status = "connected";
         } catch (error) {
@@ -58,29 +58,116 @@ export class SupabaseAdapter implements VectorDBAdapter {
 
     async listCollections(): Promise<CollectionInfo[]> {
         if (!this.client) throw new Error("Not connected");
-        return [];
+
+        // Query information_schema to find tables with 'vector' columns
+        const { data, error } = await this.client
+            .from("information_schema.columns")
+            .select("table_name, column_name, udt_name")
+            .eq("table_schema", this.config?.schema || "public")
+            .eq("udt_name", "vector");
+
+        if (error) {
+            console.error("Failed to list collections:", error);
+            // Fallback: try to list all tables if permission denied on information_schema
+            // This is less accurate as we can't be sure they are vector tables
+            return [];
+        }
+
+        const collections: CollectionInfo[] = [];
+        const processedTables = new Set<string>();
+
+        for (const row of data || []) {
+            const tableName = row.table_name;
+            if (processedTables.has(tableName)) continue;
+            processedTables.add(tableName);
+
+            // Get approximate row count
+            const { count } = await this.client
+                .from(tableName)
+                .select("*", { count: "exact", head: true });
+
+            collections.push({
+                name: tableName,
+                dimensions: 0, // Hard to get without inspecting the column definition string or data
+                distanceMetric: "cosine", // Default assumption
+                documentCount: count || 0,
+            });
+        }
+
+        return collections;
     }
 
     async createCollection(config: CreateCollectionConfig): Promise<CollectionInfo> {
         if (!this.client) throw new Error("Not connected");
-        throw new Error("Creating collections (tables) directly from the client is not supported. Please create the table in Supabase with a vector column.");
+
+        // We can't easily create tables via the JS client unless we use a stored procedure
+        // or the user has very high privileges and we use raw SQL (rpc).
+        // For now, we'll try to use an RPC call if it exists, or throw a helpful error.
+
+        try {
+            // Try to call a helper function 'create_vector_table' if it exists
+            const { error } = await this.client.rpc("create_vector_table", {
+                table_name: config.name,
+                dimensions: config.dimensions,
+                distance_metric: config.distanceMetric
+            });
+
+            if (error) throw error;
+
+            return {
+                name: config.name,
+                dimensions: config.dimensions,
+                distanceMetric: config.distanceMetric,
+                documentCount: 0
+            };
+        } catch (error) {
+            throw new Error("To create collections, please create a table in Supabase with a 'vector' column, or ensure a 'create_vector_table' RPC function exists.");
+        }
     }
 
     async getCollection(name: string): Promise<CollectionInfo> {
+        if (!this.client) throw new Error("Not connected");
+
+        // Verify table exists and has vector column
+        const { data, error } = await this.client
+            .from("information_schema.columns")
+            .select("column_name")
+            .eq("table_schema", this.config?.schema || "public")
+            .eq("table_name", name)
+            .eq("udt_name", "vector")
+            .single();
+
+        if (error || !data) {
+            throw new Error(`Collection '${name}' not found or is not a vector table.`);
+        }
+
+        const { count } = await this.client
+            .from(name)
+            .select("*", { count: "exact", head: true });
+
         return {
             name,
-            dimensions: 0,
+            dimensions: 0, // Placeholder
             distanceMetric: "cosine",
-            documentCount: 0,
+            documentCount: count || 0,
         };
     }
 
     async updateCollection(name: string, updates: UpdateCollectionConfig): Promise<void> {
-        throw new Error("Updating collections is not supported via this adapter.");
+        // No-op for now as we can't easily alter tables via client
+        if (!this.client) throw new Error("Not connected");
     }
 
     async deleteCollection(name: string): Promise<void> {
-        throw new Error("Deleting collections is not supported via this adapter.");
+        if (!this.client) throw new Error("Not connected");
+
+        // Try to use RPC to drop table
+        const { error } = await this.client.rpc("drop_table", { table_name: name });
+
+        if (error) {
+            // Fallback: try raw SQL if possible (unlikely with standard client)
+            throw new Error("Failed to delete collection. Please delete the table '" + name + "' directly in Supabase.");
+        }
     }
 
     async getCollectionStats(name: string): Promise<CollectionStats> {
