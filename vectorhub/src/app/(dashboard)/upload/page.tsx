@@ -42,11 +42,31 @@ export default function UploadPage() {
     const collections = useStore((state) => state.collections);
     const addDocument = useStore((state) => state.addDocument);
     const setCollections = useStore((state) => state.setCollections);
+    const uploadPreferences = useStore((state) => state.uploadPreferences);
+    const setUploadPreferences = useStore((state) => state.setUploadPreferences);
 
-    const [selectedConnection, setSelectedConnection] = useState<string>("");
-    const [selectedCollection, setSelectedCollection] = useState<string>("");
+    // Use persisted preferences from store
+    const selectedConnection = uploadPreferences.selectedConnection;
+    const selectedCollection = uploadPreferences.selectedCollection;
+    const syncToConnections = uploadPreferences.syncToConnections;
+
+    const setSelectedConnection = useCallback((id: string) => {
+        setUploadPreferences({ selectedConnection: id });
+    }, [setUploadPreferences]);
+
+    const setSelectedCollection = useCallback((name: string) => {
+        setUploadPreferences({ selectedCollection: name });
+    }, [setUploadPreferences]);
+
+    const setSyncToConnections = useCallback((syncMap: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => {
+        if (typeof syncMap === 'function') {
+            setUploadPreferences({ syncToConnections: syncMap(uploadPreferences.syncToConnections) });
+        } else {
+            setUploadPreferences({ syncToConnections: syncMap });
+        }
+    }, [setUploadPreferences, uploadPreferences.syncToConnections]);
+
     const [isUploading, setIsUploading] = useState(false);
-    const [syncToConnections, setSyncToConnections] = useState<Record<string, boolean>>({});
 
     const webhookConnections = useMemo(
         () => connections.filter((c) => c.type === "webhook"),

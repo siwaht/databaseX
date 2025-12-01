@@ -15,7 +15,7 @@ export const useStore = create<StoreState>()(
         }),
         {
             name: 'vectorhub-storage',
-            version: 2,
+            version: 3,
             // Only persist serializable domain data, not any future derived values or helpers
             partialize: (state: StoreState) => ({
                 connections: state.connections,
@@ -23,6 +23,7 @@ export const useStore = create<StoreState>()(
                 webhookConnections: state.webhookConnections,
                 collections: state.collections,
                 documents: state.documents,
+                uploadPreferences: state.uploadPreferences,
             }),
         }
     )
