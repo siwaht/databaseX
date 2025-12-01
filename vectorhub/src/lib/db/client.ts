@@ -13,19 +13,12 @@ import type {
 } from "./adapters/base";
 import type { ConnectionConfig, VectorDBType } from "@/types/connections";
 
-import { MongoDBAdapter } from "./adapters/mongodb-adapter";
-import { SupabaseAdapter } from "./adapters/supabase-adapter";
-
 function createAdapter(type: VectorDBType): VectorDBAdapter {
     switch (type) {
         case "webhook":
             return new WebhookAdapter();
         case "mcp":
             return new MCPAdapter();
-        case "mongodb_atlas":
-            return new MongoDBAdapter();
-        case "supabase":
-            return new SupabaseAdapter();
         default:
             return new MockAdapter();
     }
