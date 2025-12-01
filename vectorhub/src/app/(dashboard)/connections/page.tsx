@@ -9,6 +9,7 @@ import { ConnectionForm } from "@/components/connections/ConnectionForm";
 import { WebhookConnectionForm } from "@/components/connections/WebhookConnectionForm";
 import { MCPConnectionForm } from "@/components/connections/MCPConnectionForm";
 import { ConnectionDetails } from "@/components/connections/ConnectionDetails";
+import { EditConnectionModal } from "@/components/connections/EditConnectionModal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Plus, Database, Webhook, Cpu } from "lucide-react";
@@ -48,6 +49,8 @@ export default function ConnectionsPage() {
     const [syncingId, setSyncingId] = useState<string | null>(null);
     const [selectedConnection, setSelectedConnection] = useState<ConnectionConfig | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const [editConnection, setEditConnection] = useState<ConnectionConfig | null>(null);
+    const [editOpen, setEditOpen] = useState(false);
 
     const handleViewDetails = useCallback((connection: ConnectionConfig) => {
         setSelectedConnection(connection);
@@ -55,10 +58,32 @@ export default function ConnectionsPage() {
     }, []);
 
     const handleEdit = useCallback((id: string) => {
-        toast.info("Edit functionality", {
-            description: "Connection editing will be available soon.",
-        });
-    }, []);
+        const connection = connections.find((c) => c.id === id);
+        if (connection) {
+            setEditConnection(connection);
+            setEditOpen(true);
+        }
+    }, [connections]);
+
+    const handleEditSave = useCallback(
+        async (id: string, updates: Partial<ConnectionConfig>) => {
+            const toastId = toast.loading("Updating connection...");
+            try {
+                updateConnection(id, updates);
+                toast.success("Connection updated", {
+                    id: toastId,
+                    description: `"${updates.name}" has been updated.`,
+                });
+            } catch {
+                toast.error("Failed to update connection", {
+                    id: toastId,
+                    description: "An error occurred while updating the connection.",
+                });
+                throw new Error("Failed to update");
+            }
+        },
+        [updateConnection]
+    );
 
     const handleSync = useCallback(
         async (id: string) => {
@@ -232,6 +257,13 @@ export default function ConnectionsPage() {
                     setDetailsOpen(false);
                     setDeleteTarget(id);
                 }}
+            />
+
+            <EditConnectionModal
+                connection={editConnection}
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                onSave={handleEditSave}
             />
         </>
     );

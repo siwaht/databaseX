@@ -7,6 +7,7 @@ import { useStore } from "@/store";
 import { CollectionCard } from "@/components/collections/CollectionCard";
 import { CreateCollectionModal } from "@/components/collections/CreateCollectionModal";
 import { CollectionDetails } from "@/components/collections/CollectionDetails";
+import { EditCollectionModal } from "@/components/collections/EditCollectionModal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { CreateCollectionConfig, CollectionInfo } from "@/lib/db/adapters/base";
@@ -43,6 +44,8 @@ export default function CollectionsPage() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [selectedCollection, setSelectedCollection] = useState<CollectionInfo | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const [editCollection, setEditCollection] = useState<CollectionInfo | null>(null);
+    const [editOpen, setEditOpen] = useState(false);
 
     const handleViewDetails = useCallback((collection: CollectionInfo) => {
         setSelectedCollection(collection);
@@ -120,10 +123,39 @@ export default function CollectionsPage() {
     }, []);
 
     const handleEdit = useCallback((name: string) => {
-        toast.info("Edit functionality", {
-            description: `Editing "${name}" will be available soon.`,
-        });
-    }, []);
+        const collection = collections.find((c) => c.name === name);
+        if (collection) {
+            setEditCollection(collection);
+            setEditOpen(true);
+        }
+    }, [collections]);
+
+    const handleEditSave = useCallback(
+        async (name: string, updates: Partial<CollectionInfo>) => {
+            const toastId = toast.loading("Updating collection...");
+            try {
+                // Update in store
+                const collection = collections.find((c) => c.name === name);
+                if (collection) {
+                    const updatedCollections = collections.map((c) =>
+                        c.name === name ? { ...c, ...updates } : c
+                    );
+                    setCollections(updatedCollections);
+                }
+                toast.success("Collection updated", {
+                    id: toastId,
+                    description: `"${updates.name || name}" has been updated.`,
+                });
+            } catch {
+                toast.error("Failed to update collection", {
+                    id: toastId,
+                    description: "An error occurred while updating the collection.",
+                });
+                throw new Error("Failed to update");
+            }
+        },
+        [collections, setCollections]
+    );
 
     const handleViewStats = useCallback(async (name: string) => {
         const toastId = toast.loading("Loading stats...");
@@ -234,6 +266,13 @@ export default function CollectionsPage() {
                     setDetailsOpen(false);
                     setDeleteTarget(name);
                 }}
+            />
+
+            <EditCollectionModal
+                collection={editCollection}
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                onSave={handleEditSave}
             />
         </>
     );
