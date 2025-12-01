@@ -145,68 +145,48 @@ export function ScrapeUpload({ onUpload, disabled }: ScrapeUploadProps) {
         setUrls((prev) => prev.filter((u) => u.id !== id));
     }, []);
 
-    const simulateScrape = async (job: ScrapeJob): Promise<ScrapeJob> => {
-        // Simulate scraping with progress updates
-        for (let i = 0; i <= 100; i += 20) {
-            await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 200));
+    const performScrape = async (job: ScrapeJob): Promise<ScrapeJob> => {
+        try {
+            // Initial progress
             setUrls((prev) =>
-                prev.map((u) => (u.id === job.id ? { ...u, progress: i, status: "scraping" } : u))
+                prev.map((u) => (u.id === job.id ? { ...u, progress: 10, status: "scraping" } : u))
             );
-        }
 
-        // Simulate success/failure
-        const success = Math.random() > 0.1; // 90% success rate
+            const response = await fetch("/api/scrape", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: job.url }),
+            });
 
-        if (success) {
-            const docType = job.documentType || "webpage";
-            const mockContent = generateMockContent(docType, job.url);
+            const result = await response.json();
 
+            if (!result.success) {
+                throw new Error(result.error || "Failed to scrape URL");
+            }
+
+            // Success
             return {
                 ...job,
                 status: "completed",
                 progress: 100,
-                title: mockContent.title,
-                content: mockContent.content,
-                wordCount: mockContent.content.split(/\s+/).length,
+                title: result.data.metadata?.title || result.data.metadata?.source || job.url,
+                content: result.data.content,
+                wordCount: result.data.content.split(/\s+/).length,
                 lastScraped: new Date(),
-                hasChanges: enableChangeTracking ? Math.random() > 0.5 : undefined,
+                hasChanges: false, // TODO: Implement change detection logic if needed
+                documentType: result.data.metadata?.type || "webpage",
             };
-        } else {
+        } catch (error) {
             return {
                 ...job,
                 status: "error",
                 progress: 0,
-                error: "Failed to scrape content. Please check the URL and try again.",
+                error: error instanceof Error ? error.message : "Failed to scrape content",
             };
         }
     };
 
-    const generateMockContent = (docType: string, url: string) => {
-        const domain = new URL(url).hostname;
 
-        switch (docType) {
-            case "pdf":
-                return {
-                    title: `Document from ${domain}`,
-                    content: `This is parsed content from a PDF document hosted on ${domain}. The document contains important information that has been extracted using optical character recognition and text parsing. Headers, paragraphs, lists, and tables have been preserved in the markdown output.`,
-                };
-            case "excel":
-                return {
-                    title: `Spreadsheet from ${domain}`,
-                    content: `## Sheet1\n\n| Column A | Column B | Column C |\n|----------|----------|----------|\n| Data 1 | Data 2 | Data 3 |\n| Data 4 | Data 5 | Data 6 |\n\n## Sheet2\n\n| Name | Value |\n|------|-------|\n| Item 1 | 100 |\n| Item 2 | 200 |`,
-                };
-            case "word":
-                return {
-                    title: `Word Document from ${domain}`,
-                    content: `# Document Title\n\nThis is the content extracted from a Word document. The original formatting has been preserved including:\n\n- Bullet points\n- **Bold text**\n- *Italic text*\n\n## Section 2\n\nAdditional content from the document follows here with proper paragraph structure.`,
-                };
-            default:
-                return {
-                    title: `Web Page: ${domain}`,
-                    content: `This is the main content extracted from ${url}. The page contains valuable information about the topic. All relevant text has been extracted while removing navigation, ads, and other non-essential elements.\n\nKey points from this page:\n- Important information 1\n- Important information 2\n- Important information 3\n\nThe content has been cleaned and formatted for optimal use in RAG applications.`,
-                };
-        }
-    };
 
     const handleScrape = useCallback(async () => {
         const pendingJobs = urls.filter((u) => u.status === "pending" || u.status === "error");
@@ -224,7 +204,7 @@ export function ScrapeUpload({ onUpload, disabled }: ScrapeUploadProps) {
         const results: ScrapeJob[] = [];
 
         for (const job of pendingJobs) {
-            const result = await simulateScrape(job);
+            const result = await performScrape(job);
             results.push(result);
             setUrls((prev) => prev.map((u) => (u.id === result.id ? result : u)));
         }
