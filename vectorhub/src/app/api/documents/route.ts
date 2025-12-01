@@ -8,6 +8,7 @@ import {
 } from "@/lib/validations/api";
 import { logger } from "@/lib/logger";
 import type { VectorDocument } from "@/lib/db/adapters/base";
+import { generateEmbedding } from "@/lib/embeddings";
 
 // Get connection config from request headers
 function getConnectionConfig(request: Request): ConnectionConfig | null {
@@ -174,11 +175,25 @@ export async function POST(request: Request) {
     try {
         const connectionConfig = getConnectionConfig(request);
 
-        // Ensure all documents have metadata defined
-        const normalizedDocs: VectorDocument[] = documents.map((doc) => ({
-            ...doc,
-            metadata: doc.metadata ?? {},
-        }));
+        // Ensure all documents have metadata defined and generate embeddings if missing
+        const normalizedDocs: VectorDocument[] = await Promise.all(
+            documents.map(async (doc) => {
+                let embedding = doc.embedding;
+                if (!embedding && doc.content) {
+                    try {
+                        embedding = await generateEmbedding(doc.content);
+                    } catch (err) {
+                        logger.warn("Failed to generate embedding for doc", { id: doc.id, error: err });
+                    }
+                }
+
+                return {
+                    ...doc,
+                    embedding,
+                    metadata: doc.metadata ?? {},
+                };
+            })
+        );
 
         if (connectionConfig?.type === "mongodb_atlas") {
             const mongoConfig = connectionConfig.config as MongoDBAtlasConfig;

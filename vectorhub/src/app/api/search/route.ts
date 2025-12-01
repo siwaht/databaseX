@@ -4,6 +4,7 @@ import { ConnectionConfig, MongoDBAtlasConfig } from "@/types/connections";
 import { searchQuerySchema, validateRequestBody } from "@/lib/validations/api";
 import { logger } from "@/lib/logger";
 import type { SearchResult } from "@/lib/db/adapters/base";
+import { generateEmbedding } from "@/lib/embeddings";
 
 // Get connection config from request headers
 function getConnectionConfig(request: Request): ConnectionConfig | null {
@@ -157,12 +158,25 @@ export async function POST(request: Request) {
                     query.minScore || 0.5
                 );
             } else if (query.text) {
-                results = await searchMongoDBText(
-                    mongoConfig,
-                    collection,
-                    query.text,
-                    query.topK || 10
-                );
+                // Generate embedding for text query if vector is not provided
+                try {
+                    const vector = await generateEmbedding(query.text);
+                    results = await searchMongoDBVectors(
+                        mongoConfig,
+                        collection,
+                        vector,
+                        query.topK || 10,
+                        query.minScore || 0.5
+                    );
+                } catch (err) {
+                    logger.warn("Failed to generate embedding for search query, falling back to text search", { error: err });
+                    results = await searchMongoDBText(
+                        mongoConfig,
+                        collection,
+                        query.text,
+                        query.topK || 10
+                    );
+                }
             } else {
                 results = [];
             }
