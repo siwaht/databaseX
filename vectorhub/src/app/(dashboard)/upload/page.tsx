@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useStore } from "@/store";
@@ -17,9 +17,10 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, FileText, AlertCircle, Webhook, Cpu, Database, CheckCircle2, Globe } from "lucide-react";
+import { Upload, FileText, AlertCircle, Webhook, Cpu, Database, CheckCircle2, Globe, RefreshCw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { VectorDocument } from "@/lib/db/adapters/base";
 import { addDocumentsApi } from "@/lib/api/documents";
 import { listCollectionsApi } from "@/lib/api/collections";
@@ -67,6 +68,40 @@ export default function UploadPage() {
     }, [setUploadPreferences, uploadPreferences.syncToConnections]);
 
     const [isUploading, setIsUploading] = useState(false);
+    const [isLoadingCollections, setIsLoadingCollections] = useState(false);
+
+    // Fetch collections when connection changes
+    useEffect(() => {
+        if (!selectedConnection) {
+            setCollections([]);
+            return;
+        }
+
+        const connection = connections.find((c) => c.id === selectedConnection);
+        if (!connection) return;
+
+        // Don't fetch for webhook/mcp connections
+        if (connection.type === "webhook" || connection.type === "mcp") {
+            return;
+        }
+
+        setIsLoadingCollections(true);
+        listCollectionsApi(connection)
+            .then((data) => {
+                setCollections(data);
+                // Auto-select first collection if none selected
+                if (data.length > 0 && !selectedCollection) {
+                    setSelectedCollection(data[0].name);
+                }
+            })
+            .catch((err) => {
+                console.error("Failed to fetch collections:", err);
+                toast.error("Failed to load collections", {
+                    description: "Could not fetch collections from the database.",
+                });
+            })
+            .finally(() => setIsLoadingCollections(false));
+    }, [selectedConnection, connections, setCollections, selectedCollection, setSelectedCollection]);
 
     const webhookConnections = useMemo(
         () => connections.filter((c) => c.type === "webhook"),
@@ -118,13 +153,17 @@ export default function UploadPage() {
     }, [selectedConnection, selectedCollection]);
 
     const syncCollectionsFromDb = useCallback(async () => {
+        if (!selectedConnection) return;
+        const connection = connections.find((c) => c.id === selectedConnection);
+        if (!connection) return;
+        
         try {
-            const latest = await listCollectionsApi();
+            const latest = await listCollectionsApi(connection);
             setCollections(latest);
         } catch {
             // Silent fail - use existing data
         }
-    }, [setCollections]);
+    }, [selectedConnection, connections, setCollections]);
 
     const syncToExternalConnections = useCallback(
         async (docs: VectorDocument[], collection: string) => {

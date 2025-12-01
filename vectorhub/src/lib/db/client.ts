@@ -33,20 +33,32 @@ function createAdapter(type: VectorDBType): VectorDBAdapter {
 
 export class VectorDBClient {
     private adapter: VectorDBAdapter;
+    private connectionPromise: Promise<void> | null = null;
+    private config: ConnectionConfig | null = null;
 
     constructor(config?: ConnectionConfig) {
         if (config) {
+            this.config = config;
             this.adapter = createAdapter(config.type);
-            // Initialize connection immediately if config provided
-            this.adapter.connect(config).catch(console.error);
+            // Start connection - will be awaited in ensureConnected
+            this.connectionPromise = this.adapter.connect(config);
         } else {
             this.adapter = new MockAdapter();
+        }
+    }
+
+    // Ensure connection is established before operations
+    private async ensureConnected(): Promise<void> {
+        if (this.connectionPromise) {
+            await this.connectionPromise;
+            this.connectionPromise = null;
         }
     }
 
     // Proxy methods to the active adapter
 
     async connect(config: ConnectionConfig): Promise<void> {
+        this.config = config;
         this.adapter = createAdapter(config.type);
         await this.adapter.connect(config);
     }
@@ -60,46 +72,57 @@ export class VectorDBClient {
     }
 
     async testConnection() {
+        await this.ensureConnected();
         return this.adapter.testConnection();
     }
 
-    listDatabases(): Promise<DatabaseInfo[]> {
+    async listDatabases(): Promise<DatabaseInfo[]> {
+        await this.ensureConnected();
         return this.adapter.listDatabases?.() ?? Promise.resolve([]);
     }
 
-    listCollections(): Promise<CollectionInfo[]> {
+    async listCollections(): Promise<CollectionInfo[]> {
+        await this.ensureConnected();
         return this.adapter.listCollections();
     }
 
-    createCollection(config: CreateCollectionConfig): Promise<CollectionInfo> {
+    async createCollection(config: CreateCollectionConfig): Promise<CollectionInfo> {
+        await this.ensureConnected();
         return this.adapter.createCollection(config);
     }
 
-    getCollection(name: string): Promise<CollectionInfo> {
+    async getCollection(name: string): Promise<CollectionInfo> {
+        await this.ensureConnected();
         return this.adapter.getCollection(name);
     }
 
-    updateCollection(name: string, updates: UpdateCollectionConfig): Promise<void> {
+    async updateCollection(name: string, updates: UpdateCollectionConfig): Promise<void> {
+        await this.ensureConnected();
         return this.adapter.updateCollection(name, updates);
     }
 
-    deleteCollection(name: string, cascade?: boolean): Promise<void> {
+    async deleteCollection(name: string, cascade?: boolean): Promise<void> {
+        await this.ensureConnected();
         return this.adapter.deleteCollection(name, cascade);
     }
 
-    getCollectionStats(name: string): Promise<CollectionStats> {
+    async getCollectionStats(name: string): Promise<CollectionStats> {
+        await this.ensureConnected();
         return this.adapter.getCollectionStats(name);
     }
 
-    addDocuments(collection: string, documents: VectorDocument[]): Promise<string[]> {
+    async addDocuments(collection: string, documents: VectorDocument[]): Promise<string[]> {
+        await this.ensureConnected();
         return this.adapter.addDocuments(collection, documents);
     }
 
-    deleteDocuments(collection: string, ids: string[]): Promise<void> {
+    async deleteDocuments(collection: string, ids: string[]): Promise<void> {
+        await this.ensureConnected();
         return this.adapter.deleteDocuments(collection, ids);
     }
 
-    search(collection: string, query: SearchQuery): Promise<SearchResult[]> {
+    async search(collection: string, query: SearchQuery): Promise<SearchResult[]> {
+        await this.ensureConnected();
         return this.adapter.search(collection, query);
     }
 }
