@@ -58,37 +58,37 @@ export default function SearchPage() {
     // Helper to extract HTTP endpoint from any config
     const getHttpEndpoint = (config: any): string => {
         if (!config) return "";
-        
+
         // Check direct URL fields first
         if (config.webhookUrl) return config.webhookUrl;
         if (config.url) return config.url;
         if (config.baseUrl) return config.baseUrl;
         if (config.endpoint) return config.endpoint;
-        
+
         // Check for supergateway pattern in args (extracts --streamableHttp URL)
         if (config.args && Array.isArray(config.args)) {
             const args = config.args as string[];
-            const streamableIndex = args.findIndex((arg: string) => 
+            const streamableIndex = args.findIndex((arg: string) =>
                 arg === "--streamableHttp" || arg === "--sse"
             );
             if (streamableIndex !== -1 && args[streamableIndex + 1]) {
                 return args[streamableIndex + 1];
             }
             // Also check for URLs directly in args
-            const urlArg = args.find((arg: string) => 
+            const urlArg = args.find((arg: string) =>
                 arg.startsWith("http://") || arg.startsWith("https://")
             );
             if (urlArg) return urlArg;
         }
-        
+
         return "";
     };
-    
+
     // Helper to extract auth header from supergateway config
     const getAuthHeader = (config: any): string | undefined => {
         if (!config) return undefined;
         if (config.authToken) return config.authToken;
-        
+
         // Check for --header in args
         if (config.args && Array.isArray(config.args)) {
             const args = config.args as string[];
@@ -102,7 +102,7 @@ export default function SearchPage() {
                 return headerValue;
             }
         }
-        
+
         return undefined;
     };
 
@@ -150,7 +150,7 @@ export default function SearchPage() {
                 endpoint: webhook.url,
                 status: webhook.status,
             })),
-    ].filter((agent, index, self) => 
+    ].filter((agent, index, self) =>
         // Remove duplicates by id
         index === self.findIndex((a) => a.id === agent.id)
     );
@@ -188,12 +188,12 @@ export default function SearchPage() {
                         minScore: minScore[0],
                         agent: agent
                             ? {
-                                  type: agent.type,
-                                  endpoint: agent.endpoint,
-                                  authHeader: agent.authHeader,
-                                  name: agent.name,
-                                  config: getAgentConfig(agent),
-                              }
+                                type: agent.type,
+                                endpoint: agent.endpoint,
+                                authHeader: agent.authHeader,
+                                name: agent.name,
+                                config: getAgentConfig(agent),
+                            }
                             : null,
                     }),
                 });
@@ -229,10 +229,10 @@ export default function SearchPage() {
             <motion.div variants={itemVariants}>
                 <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
                     <Sparkles className="h-8 w-8 text-primary" />
-                    RAG Playground
+                    Chat AI Agent
                 </h2>
                 <p className="text-muted-foreground">
-                    Test your vector database with AI-powered retrieval augmented generation.
+                    Chat with your documents and use MCP tools to perform actions.
                 </p>
             </motion.div>
 

@@ -1,64 +1,71 @@
-import { useState, useCallback } from "react";
+
+"use client";
+
+import { useCallback, useState } from "react";
+import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, File, X, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Upload, File as FileIcon, X, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AdvancedSettings } from "./AdvancedSettings";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface UploadZoneProps {
-    onUpload: (files: File[], options?: { chunkSize: number; chunkOverlap: number }) => void;
+    onUpload: (files: File[]) => Promise<void>;
     disabled?: boolean;
 }
 
-export function UploadZone({ onUpload, disabled = false }: UploadZoneProps) {
-    const [isDragging, setIsDragging] = useState(false);
+export function UploadZone({ onUpload, disabled }: UploadZoneProps) {
     const [files, setFiles] = useState<File[]>([]);
-    const [chunkSize, setChunkSize] = useState(1000);
-    const [chunkOverlap, setChunkOverlap] = useState(200);
-    const [useAdvanced, setUseAdvanced] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
-    const handleDragOver = useCallback(
-        (e: React.DragEvent) => {
-            e.preventDefault();
-            if (!disabled) setIsDragging(true);
-        },
-        [disabled]
-    );
+    const onDrop = useCallback((acceptedFiles: File[]) => {
+        // Filter for supported files
+        const supportedFiles = acceptedFiles.filter(file =>
+            file.type === "application/pdf" ||
+            file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+            file.name.endsWith(".pdf") ||
+            file.name.endsWith(".docx")
+        );
 
-    const handleDragLeave = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
+        if (supportedFiles.length === 0) {
+            toast.error("No supported files found. Please upload PDF or DOCX files.");
+            return;
+        }
+
+        if (supportedFiles.length < acceptedFiles.length) {
+            toast.warning(`Skipped ${acceptedFiles.length - supportedFiles.length} unsupported files.`);
+        }
+
+        setFiles(prev => [...prev, ...supportedFiles]);
     }, []);
 
-    const handleDrop = useCallback(
-        (e: React.DragEvent) => {
-            e.preventDefault();
-            setIsDragging(false);
-            if (disabled) return;
-            const droppedFiles = Array.from(e.dataTransfer.files);
-            setFiles((prev) => [...prev, ...droppedFiles]);
+    const { getRootProps, getInputProps, isDragActive } = useDropzone({
+        onDrop,
+        accept: {
+            "application/pdf": [".pdf"],
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
         },
-        [disabled]
-    );
-
-    const handleFileInput = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => {
-            if (e.target.files && !disabled) {
-                const selectedFiles = Array.from(e.target.files);
-                setFiles((prev) => [...prev, ...selectedFiles]);
-            }
-        },
-        [disabled]
-    );
+        disabled: disabled || isUploading,
+        maxSize: 10 * 1024 * 1024, // 10MB
+    });
 
     const removeFile = (index: number) => {
-        setFiles((prev) => prev.filter((_, i) => i !== index));
+        setFiles(prev => prev.filter((_, i) => i !== index));
     };
 
-    const handleUpload = () => {
-        if (files.length > 0 && !disabled) {
-            onUpload(files, useAdvanced ? { chunkSize, chunkOverlap } : undefined);
+    const handleUpload = async () => {
+        if (files.length === 0) return;
+
+        setIsUploading(true);
+        try {
+            await onUpload(files);
             setFiles([]);
+            toast.success("Files uploaded successfully");
+        } catch (error) {
+            console.error("Upload error:", error);
+            toast.error("Failed to upload files");
+        } finally {
+            setIsUploading(false);
         }
     };
 
@@ -71,86 +78,60 @@ export function UploadZone({ onUpload, disabled = false }: UploadZoneProps) {
     return (
         <div className="space-y-6">
             <div
+                {...getRootProps()}
                 className={cn(
-                    "relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-all duration-200",
-                    isDragging
+                    "relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-all duration-200 cursor-pointer",
+                    isDragActive
                         ? "border-primary bg-primary/5 scale-[1.02]"
                         : "border-muted-foreground/25 hover:border-muted-foreground/40",
-                    disabled && "opacity-50 cursor-not-allowed"
+                    (disabled || isUploading) && "opacity-50 cursor-not-allowed"
                 )}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
             >
+                <input {...getInputProps()} />
                 <motion.div
                     className="mb-4 h-16 w-16 rounded-full bg-muted flex items-center justify-center"
-                    animate={{ scale: isDragging ? 1.1 : 1 }}
+                    animate={{ scale: isDragActive ? 1.1 : 1 }}
                     transition={{ duration: 0.2 }}
                 >
                     <Upload
                         className={cn(
                             "h-8 w-8 transition-colors",
-                            isDragging ? "text-primary" : "text-muted-foreground"
+                            isDragActive ? "text-primary" : "text-muted-foreground"
                         )}
                     />
                 </motion.div>
                 <h3 className="mb-2 text-lg font-semibold">
-                    {isDragging ? "Drop files here" : "Drag & drop files here"}
+                    {isDragActive ? "Drop files here" : "Drag & drop files here"}
                 </h3>
                 <p className="mb-4 text-sm text-muted-foreground text-center">
-                    Supported formats: PDF, TXT, MD, DOCX, CSV, JSON
+                    Supported formats: PDF, DOCX
                     <br />
                     <span className="text-xs">Max file size: 10 MB</span>
                 </p>
-                <div className="relative">
-                    <Button variant="secondary" disabled={disabled}>
-                        Browse Files
-                    </Button>
-                    <input
-                        type="file"
-                        multiple
-                        className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                        onChange={handleFileInput}
-                        disabled={disabled}
-                        accept=".pdf,.txt,.md,.docx,.csv,.json"
-                    />
-                </div>
+                <Button variant="secondary" disabled={disabled || isUploading}>
+                    Browse Files
+                </Button>
             </div>
 
-            <AdvancedSettings
-                options={{
-                    chunkSize,
-                    chunkOverlap,
-                }}
-                onChange={(opts) => {
-                    setChunkSize(opts.chunkSize);
-                    setChunkOverlap(opts.chunkOverlap);
-                }}
-                showParsingOptions={false}
-                enabled={useAdvanced}
-                onEnabledChange={setUseAdvanced}
-            />
-
-            <AnimatePresence mode="popLayout">
+            <AnimatePresence>
                 {files.length > 0 && (
                     <motion.div
-                        className="space-y-2"
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
+                        className="space-y-2"
                     >
                         {files.map((file, i) => (
                             <motion.div
-                                key={`${file.name}-${i}`}
+                                key={`${ file.name } -${ i } `}
                                 className="flex items-center justify-between rounded-lg border bg-card p-3"
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: 20 }}
                                 transition={{ delay: i * 0.05 }}
                             >
-                                <div className="flex items-center space-x-3">
                                     <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center">
-                                        <File className="h-4 w-4 text-muted-foreground" />
+                                        <FileIcon className="h-4 w-4 text-muted-foreground" />
                                     </div>
                                     <div>
                                         <p className="text-sm font-medium truncate max-w-[200px]">
@@ -167,21 +148,30 @@ export function UploadZone({ onUpload, disabled = false }: UploadZoneProps) {
                                         variant="ghost"
                                         size="icon"
                                         className="h-8 w-8"
-                                        onClick={() => removeFile(i)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeFile(i);
+                                        }}
+                                        disabled={isUploading}
                                     >
                                         <X className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </motion.div>
-                        ))}
-                        <div className="flex justify-end pt-2">
-                            <Button onClick={handleUpload} disabled={disabled}>
-                                Upload {files.length} File{files.length !== 1 ? "s" : ""}
-                            </Button>
-                        </div>
-                    </motion.div>
+                ))}
+                <div className="flex justify-end pt-2">
+                    <Button onClick={handleUpload} disabled={disabled || isUploading}>
+                        {isUploading ? (
+                            <>Uploading...</>
+                        ) : (
+                            <>Upload {files.length} File{files.length !== 1 ? "s" : ""}</>
+                        )}
+                    </Button>
+                </div>
+            </motion.div>
                 )}
-            </AnimatePresence>
-        </div>
+        </AnimatePresence>
+        </div >
     );
 }
+```

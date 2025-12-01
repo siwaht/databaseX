@@ -265,11 +265,11 @@ export function RAGChat({
                 prev.map((msg) =>
                     msg.id === loadingMessage.id
                         ? {
-                              ...msg,
-                              content: response,
-                              context,
-                              isLoading: false,
-                          }
+                            ...msg,
+                            content: response,
+                            context,
+                            isLoading: false,
+                        }
                         : msg
                 )
             );
@@ -278,11 +278,11 @@ export function RAGChat({
                 prev.map((msg) =>
                     msg.id === loadingMessage.id
                         ? {
-                              ...msg,
-                              content:
-                                  "Sorry, I encountered an error processing your request. Please try again.",
-                              isLoading: false,
-                          }
+                            ...msg,
+                            content:
+                                "Sorry, I encountered an error processing your request. Please try again.",
+                            isLoading: false,
+                        }
                         : msg
                 )
             );
@@ -322,7 +322,7 @@ export function RAGChat({
                         <Sparkles className="h-5 w-5 text-primary-foreground" />
                     </div>
                     <div>
-                        <h3 className="font-semibold">RAG Assistant</h3>
+                        <h3 className="font-semibold">Chat AI Agent</h3>
                         <p className="text-xs text-muted-foreground">
                             Searching in: {collectionName || "No collection selected"}
                         </p>
@@ -379,8 +379,8 @@ export function RAGChat({
                                     agent.status === "connected"
                                         ? "bg-emerald-500"
                                         : agent.status === "error"
-                                        ? "bg-red-500"
-                                        : "bg-zinc-400"
+                                            ? "bg-red-500"
+                                            : "bg-zinc-400"
                                 )}
                             />
                         </Button>
@@ -404,8 +404,7 @@ export function RAGChat({
                             Start a Conversation
                         </h3>
                         <p className="text-sm text-muted-foreground max-w-sm">
-                            Ask questions about your documents. The assistant will
-                            search the vector database and provide relevant answers.
+                            Ask questions about your documents or use MCP tools to perform tasks.
                         </p>
                         <div className="flex flex-wrap justify-center gap-2 mt-4">
                             {[
