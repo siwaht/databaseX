@@ -6,15 +6,15 @@ export type VectorDBType =
     | 'pinecone'
     | 'qdrant'
     | 'redis'
-    | 'upstash';
-
-export type ConnectionStatus = 'connected' | 'disconnected' | 'error';
+    | 'upstash'
+    | 'webhook'
+    | 'mcp';
 
 export interface ConnectionConfig {
     id: string;
     name: string;
     type: VectorDBType;
-    status: ConnectionStatus;
+    status: 'connected' | 'disconnected' | 'error';
     lastSync: Date;
     config:
     | ChromaDBConfig
@@ -24,7 +24,9 @@ export interface ConnectionConfig {
     | PineconeConfig
     | QdrantConfig
     | RedisConfig
-    | UpstashConfig;
+    | UpstashConfig
+    | WebhookConfig
+    | MCPConfig;
 }
 
 export interface MongoDBAtlasConfig {
@@ -83,23 +85,34 @@ export interface UpstashConfig {
     token: string;
 }
 
-// MCP Connections represent integrations that follow the Model Context Protocol.
-export interface McpConnection {
-    id: string;
-    name: string;
-    endpoint: string;
-    status: ConnectionStatus;
-    lastSync: Date;
-    tags?: string[];
+export interface WebhookConfig {
+    baseUrl: string;
+    authType: 'none' | 'api_key' | 'bearer' | 'basic';
+    authValue?: string;
+    headers?: Record<string, string>;
+    endpoints: {
+        create: string;
+        read: string;
+        update: string;
+        delete: string;
+        search: string;
+    };
+    retryCount: number;
+    timeoutMs: number;
 }
 
-// Webhook connections represent outbound HTTP callbacks for VectorHub events.
-export interface WebhookConnection {
-    id: string;
-    name: string;
-    url: string;
-    eventTypes: string[];
-    status: ConnectionStatus;
-    lastDelivery?: Date;
-    secretConfigured: boolean;
+export interface MCPConfig {
+    serverUrl: string;
+    serverName: string;
+    authToken?: string;
+    capabilities: {
+        vectorCreate: boolean;
+        vectorUpdate: boolean;
+        vectorDelete: boolean;
+        vectorSearch: boolean;
+    };
+    modelPreferences?: {
+        embeddingModel?: string;
+        dimensions?: number;
+    };
 }
