@@ -237,6 +237,9 @@ export interface MCPConfig {
     // For SSE transport
     url?: string;
     
+    // Webhook URL for HTTP-based AI queries (n8n, Make.com, etc.)
+    webhookUrl?: string;
+    
     // Common options
     serverName?: string;
     authToken?: string;

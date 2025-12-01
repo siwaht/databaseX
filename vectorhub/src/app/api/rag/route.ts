@@ -59,152 +59,66 @@ ${contextSummary}
 ${agentName ? `*Response via: ${agentName}*` : ""}`;
 }
 
-// Call webhook agent (Make.com, n8n, Zapier, etc.)
-async function callWebhookAgent(
-    endpoint: string,
+// Call any AI agent via HTTP (works for MCP SSE, webhooks, n8n, etc.)
+async function callHttpAgent(
+    url: string,
     query: string,
     context: SearchResult[],
     agentName: string
 ): Promise<string> {
-    try {
-        logger.info(`Calling webhook agent: ${agentName} at ${endpoint}`);
-        
-        const response = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                query,
-                message: query,
-                context: context.map((c) => ({
-                    content: c.content,
-                    score: c.score,
-                    metadata: c.metadata,
-                    source: c.metadata?.source,
-                })),
-                timestamp: new Date().toISOString(),
-            }),
-        });
+    logger.info(`Calling HTTP agent: ${agentName} at ${url}`);
+    
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body: JSON.stringify({
+            // Send in multiple formats for compatibility with different platforms
+            query,
+            message: query,
+            prompt: query,
+            text: query,
+            context: context.map((c) => ({
+                content: c.content,
+                score: c.score,
+                relevance: c.score,
+                metadata: c.metadata,
+                source: c.metadata?.source,
+            })),
+            documents: context.map((c) => c.content),
+            timestamp: new Date().toISOString(),
+        }),
+    });
 
-        if (!response.ok) {
-            const errorText = await response.text().catch(() => "Unknown error");
-            throw new Error(`Webhook returned ${response.status}: ${errorText}`);
-        }
-
-        const data = await response.json();
-        
-        // Handle various response formats from automation platforms
-        const result = data.response || data.message || data.content || data.text || data.output || data.result;
-        
-        if (typeof result === "string") {
-            return result;
-        } else if (result) {
-            return JSON.stringify(result, null, 2);
-        }
-        
-        return JSON.stringify(data, null, 2);
-    } catch (error) {
-        logger.error("Webhook agent call failed", error instanceof Error ? error : undefined);
-        throw error;
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => "Unknown error");
+        throw new Error(`Agent returned ${response.status}: ${errorText}`);
     }
-}
 
-// Call MCP agent (stdio or SSE)
-async function callMcpAgent(
-    endpoint: string | undefined,
-    query: string,
-    context: SearchResult[],
-    agentName: string,
-    config?: RAGRequest["agent"]["config"]
-): Promise<string> {
-    try {
-        logger.info(`Calling MCP agent: ${agentName}`);
-        
-        // For SSE-based MCP servers
-        if (config?.type === "sse" && config.url) {
-            const response = await fetch(config.url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                body: JSON.stringify({
-                    jsonrpc: "2.0",
-                    id: Date.now(),
-                    method: "tools/call",
-                    params: {
-                        name: "query",
-                        arguments: {
-                            query,
-                            context: context.map((c) => ({
-                                content: c.content,
-                                relevance: c.score,
-                                source: c.metadata?.source,
-                            })),
-                        },
-                    },
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`MCP endpoint returned ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.result?.content || data.response || JSON.stringify(data);
-        }
-        
-        // For stdio-based MCP servers (command-based)
-        // These run as local processes - we simulate a response here
-        // In production, you'd use a proper MCP client library
-        if (config?.type === "stdio" && config.command) {
-            // Since we can't easily spawn processes in Next.js API routes,
-            // we'll return the context in a formatted way
-            const contextText = context
-                .map((c) => `Source: ${c.metadata?.source || "Unknown"}\n${c.content}`)
-                .join("\n\n---\n\n");
-            
-            return `**Query:** ${query}
-
-**Retrieved Context from Vector Database:**
-
-${contextText || "No relevant documents found."}
-
----
-*Note: This MCP server (${agentName}) uses stdio transport. For full AI-powered responses, use an HTTP/SSE-based endpoint or configure a webhook to an AI service.*`;
-        }
-
-        // Fallback for HTTP endpoint
-        if (endpoint) {
-            const response = await fetch(endpoint, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    query,
-                    context: context.map((c) => ({
-                        content: c.content,
-                        score: c.score,
-                        metadata: c.metadata,
-                    })),
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`MCP endpoint returned ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.result?.content || data.response || data.message || JSON.stringify(data);
-        }
-
-        throw new Error("No valid MCP endpoint configured");
-    } catch (error) {
-        logger.error("MCP agent call failed", error instanceof Error ? error : undefined);
-        throw error;
+    const data = await response.json();
+    
+    // Handle various response formats from different platforms
+    const result = 
+        data.response || 
+        data.message || 
+        data.content || 
+        data.text || 
+        data.output || 
+        data.result?.content ||
+        data.result ||
+        data.completion ||
+        data.answer;
+    
+    if (typeof result === "string") {
+        return result;
+    } else if (result) {
+        return typeof result === "object" ? JSON.stringify(result, null, 2) : String(result);
     }
+    
+    // If no known field, return the whole response
+    return JSON.stringify(data, null, 2);
 }
 
 export async function POST(request: Request) {
@@ -251,46 +165,27 @@ export async function POST(request: Request) {
             // Use built-in response generator
             response = generateResponse(query, context, "Vector Search");
             agentUsed = "Vector Search";
-        } else if (agent.type === "webhook") {
-            // Call webhook agent (Make.com, n8n, Zapier, etc.)
-            const endpoint = agent.endpoint || agent.config?.baseUrl;
+        } else {
+            // For both webhook and MCP types, try to call the HTTP endpoint
+            const endpoint = agent.endpoint || agent.config?.url || agent.config?.baseUrl;
+            
             if (endpoint) {
                 try {
-                    response = await callWebhookAgent(endpoint, query, context, agentName);
+                    response = await callHttpAgent(endpoint, query, context, agentName);
                     agentUsed = agentName;
                 } catch (err) {
                     const errorMsg = err instanceof Error ? err.message : "Unknown error";
-                    logger.error(`Webhook call failed: ${errorMsg}`);
+                    logger.error(`Agent call failed (${agent.type}): ${errorMsg}`);
                     response = generateResponse(query, context, agentName);
-                    response += `\n\n⚠️ *Could not reach webhook endpoint. Showing vector search results instead.*\n*Error: ${errorMsg}*`;
+                    response += `\n\n⚠️ *Could not reach ${agentName}.*\n*Error: ${errorMsg}*`;
                     agentUsed = `${agentName} (fallback)`;
                 }
             } else {
-                response = generateResponse(query, context, agentName);
-                response += "\n\n⚠️ *No webhook endpoint configured.*";
+                // No endpoint - use vector search only
+                response = generateResponse(query, context, "Vector Search");
+                response += `\n\n💡 *No HTTP endpoint configured for ${agentName}. Please add a webhook URL in the connection settings.*`;
                 agentUsed = "Vector Search";
             }
-        } else if (agent.type === "mcp") {
-            // Call MCP agent
-            try {
-                response = await callMcpAgent(
-                    agent.endpoint,
-                    query,
-                    context,
-                    agentName,
-                    agent.config
-                );
-                agentUsed = agentName;
-            } catch (err) {
-                const errorMsg = err instanceof Error ? err.message : "Unknown error";
-                logger.error(`MCP call failed: ${errorMsg}`);
-                response = generateResponse(query, context, agentName);
-                response += `\n\n⚠️ *Could not communicate with MCP server. Showing vector search results instead.*`;
-                agentUsed = `${agentName} (fallback)`;
-            }
-        } else {
-            response = generateResponse(query, context, "Vector Search");
-            agentUsed = "Vector Search";
         }
 
         const result: RAGResponse = {

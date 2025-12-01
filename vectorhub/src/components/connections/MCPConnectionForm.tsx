@@ -230,6 +230,7 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
     const [envVars, setEnvVars] = useState<EnvVar[]>([]);
     const [sseUrl, setSseUrl] = useState("");
     const [authToken, setAuthToken] = useState("");
+    const [webhookUrl, setWebhookUrl] = useState("");
     const [jsonInput, setJsonInput] = useState("");
     const [jsonError, setJsonError] = useState<string | null>(null);
     const [inputMode, setInputMode] = useState<"form" | "json">("form");
@@ -374,9 +375,10 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
                 : {
                     url: sseUrl,
                 }),
+            webhookUrl: webhookUrl || undefined,
             authToken: authToken || undefined,
         };
-    }, [transportType, command, args, envVars, sseUrl, authToken]);
+    }, [transportType, command, args, envVars, sseUrl, webhookUrl, authToken]);
 
     const handleTestConnection = useCallback(async () => {
         setStep("testing");
@@ -674,6 +676,20 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
                         </Button>
                         {advancedOpen && (
                             <div className="space-y-4 pt-2 pl-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="webhookUrl">
+                                        Webhook URL for AI Queries
+                                    </Label>
+                                    <Input
+                                        id="webhookUrl"
+                                        placeholder="https://n8n.example.com/webhook/..."
+                                        value={webhookUrl}
+                                        onChange={(e) => setWebhookUrl(e.target.value)}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        HTTP endpoint for RAG queries (n8n, Make.com, etc.). Required for AI-powered responses in RAG Playground.
+                                    </p>
+                                </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="authToken">Auth Token (Optional)</Label>
                                     <Input

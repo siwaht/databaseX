@@ -55,6 +55,13 @@ export default function SearchPage() {
     const [topK, setTopK] = useState([5]);
     const [minScore, setMinScore] = useState([0.5]);
 
+    // Helper to extract HTTP endpoint from any config
+    const getHttpEndpoint = (config: any): string => {
+        if (!config) return "";
+        // Check all possible URL fields in order of preference
+        return config.webhookUrl || config.url || config.baseUrl || config.endpoint || "";
+    };
+
     // Build agents list from:
     // 1. Main connections array (type === "mcp" or "webhook")
     // 2. Legacy mcpConnections and webhookConnections arrays
@@ -66,7 +73,7 @@ export default function SearchPage() {
                 id: mcp.id,
                 name: mcp.name,
                 type: "mcp" as const,
-                endpoint: (mcp.config as any)?.url || (mcp.config as any)?.command || "",
+                endpoint: getHttpEndpoint(mcp.config),
                 status: mcp.status,
             })),
         // Webhook connections from main connections array
@@ -76,7 +83,7 @@ export default function SearchPage() {
                 id: webhook.id,
                 name: webhook.name,
                 type: "webhook" as const,
-                endpoint: (webhook.config as any)?.baseUrl || "",
+                endpoint: getHttpEndpoint(webhook.config),
                 status: webhook.status,
             })),
         // Legacy mcpConnections array
