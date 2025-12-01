@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { ConnectionConfig, VectorDBType } from "@/types/connections";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Zap } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -17,6 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ConnectionTestResult, ConnectionTestData } from "./ConnectionTestResult";
 
 interface ConnectionFormProps {
     onSubmit: (data: Partial<ConnectionConfig>) => void;
@@ -231,10 +233,68 @@ const getFieldsForType = (type: VectorDBType) => {
     }
 };
 
+// Mock function to simulate testing a database connection
+async function testDatabaseConnection(
+    type: VectorDBType,
+    name: string,
+    config: Record<string, unknown>
+): Promise<ConnectionTestData> {
+    // Simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1000));
+
+    // Simulate different responses based on type
+    const mockCollections = [
+        { name: "documents", documentCount: 1250, dimensions: 1536 },
+        { name: "embeddings", documentCount: 3400, dimensions: 768 },
+        { name: "vectors", documentCount: 890, dimensions: 1536 },
+    ];
+
+    // Randomly select 1-3 collections for demo
+    const numCollections = Math.floor(Math.random() * 3) + 1;
+    const collections = mockCollections.slice(0, numCollections);
+
+    const dbInfo: Record<VectorDBType, { version?: string; host?: string; database?: string }> = {
+        pinecone: { version: "2024.1", host: (config.environment as string) || "us-east-1-aws" },
+        weaviate: { version: "1.24.0", host: (config.host as string) || "localhost" },
+        qdrant: { version: "1.8.0", host: (config.host as string) || "localhost" },
+        chromadb: { version: "0.4.22", host: (config.host as string) || "localhost" },
+        milvus: { version: "2.3.0", host: (config.host as string) || "localhost" },
+        supabase: { version: "pgvector 0.5.1", host: (config.projectUrl as string)?.replace("https://", "").split(".")[0] || "project" },
+        mongodb_atlas: { version: "7.0", host: "Atlas Cluster", database: (config.database as string) || "default" },
+        neo4j: { version: "5.15.0", host: (config.uri as string) || "localhost", database: (config.database as string) || "neo4j" },
+        elasticsearch: { version: "8.12.0", host: (config.node as string) || "localhost" },
+        pgvector: { version: "0.5.1", host: (config.host as string) || "localhost", database: (config.database as string) || "postgres" },
+        opensearch: { version: "2.11.0", host: (config.node as string) || "localhost" },
+        astra_db: { version: "Serverless", host: "Astra DB" },
+        singlestore: { version: "8.5", host: (config.host as string) || "localhost", database: (config.database as string) },
+        typesense: { version: "0.25.2", host: (config.host as string) || "localhost" },
+        vespa: { version: "8.295.14", host: (config.endpoint as string) || "vespa-cloud" },
+        redis: { version: "7.2.4", host: (config.host as string) || "localhost" },
+        upstash: { version: "Serverless", host: "Upstash" },
+        lancedb: { version: "0.4.0", host: (config.uri as string) || "local" },
+        marqo: { version: "2.0.0", host: (config.url as string) || "localhost" },
+        turbopuffer: { version: "1.0", host: "Turbopuffer Cloud" },
+        webhook: {},
+        mcp: {},
+    };
+
+    return {
+        success: true,
+        connectionName: name,
+        connectionType: type,
+        latency: Math.floor(50 + Math.random() * 200),
+        databaseInfo: dbInfo[type] || {},
+        collections,
+    };
+}
+
 export function ConnectionForm({ onSubmit, onCancel }: ConnectionFormProps) {
     const [name, setName] = useState("");
     const [type, setType] = useState<VectorDBType>("pinecone");
     const [configValues, setConfigValues] = useState<Record<string, string | boolean>>({});
+    const [step, setStep] = useState<"form" | "testing" | "result">("form");
+    const [testResult, setTestResult] = useState<ConnectionTestData | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     const fields = useMemo(() => getFieldsForType(type), [type]);
 
@@ -245,12 +305,11 @@ export function ConnectionForm({ onSubmit, onCancel }: ConnectionFormProps) {
     const handleTypeChange = (newType: VectorDBType) => {
         setType(newType);
         setConfigValues({}); // Reset config values when type changes
+        setStep("form");
+        setTestResult(null);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        // Build config object from field values
+    const buildConfig = useCallback(() => {
         const config: Record<string, unknown> = {};
         fields.forEach((field) => {
             const value = configValues[field.name];
@@ -262,7 +321,33 @@ export function ConnectionForm({ onSubmit, onCancel }: ConnectionFormProps) {
                 }
             }
         });
+        return config;
+    }, [fields, configValues]);
 
+    const handleTestConnection = useCallback(async () => {
+        setStep("testing");
+        setIsLoading(true);
+        setTestResult(null);
+
+        try {
+            const config = buildConfig();
+            const result = await testDatabaseConnection(type, name, config);
+            setTestResult(result);
+        } catch {
+            setTestResult({
+                success: false,
+                connectionName: name,
+                connectionType: type,
+                error: "Failed to connect. Please check your credentials and try again.",
+            });
+        } finally {
+            setIsLoading(false);
+            setStep("result");
+        }
+    }, [type, name, buildConfig]);
+
+    const handleConfirmConnection = useCallback(() => {
+        const config = buildConfig();
         onSubmit({
             name,
             type,
@@ -270,14 +355,36 @@ export function ConnectionForm({ onSubmit, onCancel }: ConnectionFormProps) {
             lastSync: new Date(),
             config: config as ConnectionConfig["config"],
         });
-    };
+    }, [name, type, buildConfig, onSubmit]);
+
+    const handleRetry = useCallback(() => {
+        handleTestConnection();
+    }, [handleTestConnection]);
+
+    const handleBack = useCallback(() => {
+        setStep("form");
+        setTestResult(null);
+    }, []);
 
     const selectedDb = databaseOptions
         .flatMap((cat) => cat.databases)
         .find((db) => db.value === type);
 
+    // Show test result view
+    if (step === "testing" || step === "result") {
+        return (
+            <ConnectionTestResult
+                data={testResult}
+                isLoading={isLoading}
+                onConfirm={handleConfirmConnection}
+                onRetry={handleRetry}
+                onCancel={handleBack}
+            />
+        );
+    }
+
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleTestConnection(); }} className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="name">Connection Name</Label>
                 <Input
@@ -382,7 +489,10 @@ export function ConnectionForm({ onSubmit, onCancel }: ConnectionFormProps) {
                 <Button variant="outline" type="button" onClick={onCancel}>
                     Cancel
                 </Button>
-                <Button type="submit">Connect</Button>
+                <Button type="submit">
+                    <Zap className="mr-2 h-4 w-4" />
+                    Test Connection
+                </Button>
             </div>
         </form>
     );

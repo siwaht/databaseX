@@ -21,8 +21,9 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs";
-import { Plus, Trash2, Terminal, Globe, ChevronDown, FileJson, Copy, Check, Info } from "lucide-react";
+import { Plus, Trash2, Terminal, Globe, ChevronDown, FileJson, Copy, Check, Info, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ConnectionTestResult, ConnectionTestData } from "./ConnectionTestResult";
 
 interface MCPConnectionFormProps {
     onSubmit: (data: Partial<ConnectionConfig>) => void;
@@ -32,6 +33,91 @@ interface MCPConnectionFormProps {
 interface EnvVar {
     key: string;
     value: string;
+}
+
+// Mock function to simulate testing an MCP server connection
+async function testMCPConnection(
+    name: string,
+    config: MCPConfig
+): Promise<ConnectionTestData> {
+    // Simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 1500));
+
+    // Determine tools based on server name/command pattern
+    const serverName = name.toLowerCase();
+    
+    // Mock tools based on common MCP servers
+    let mockTools: { name: string; description?: string }[] = [];
+    let mockResources: { name: string; uri?: string; description?: string }[] = [];
+    
+    if (serverName.includes("mongo")) {
+        mockTools = [
+            { name: "find", description: "Find documents in a collection" },
+            { name: "aggregate", description: "Run aggregation pipeline" },
+            { name: "listCollections", description: "List all collections" },
+            { name: "count", description: "Count documents in collection" },
+        ];
+        mockResources = [
+            { name: "collections", uri: "mongodb://collections", description: "Database collections" },
+        ];
+    } else if (serverName.includes("postgres") || serverName.includes("sql")) {
+        mockTools = [
+            { name: "query", description: "Execute SQL query" },
+            { name: "listTables", description: "List all tables" },
+            { name: "describeTable", description: "Get table schema" },
+        ];
+    } else if (serverName.includes("filesystem") || serverName.includes("file")) {
+        mockTools = [
+            { name: "readFile", description: "Read contents of a file" },
+            { name: "writeFile", description: "Write to a file" },
+            { name: "listDirectory", description: "List directory contents" },
+            { name: "searchFiles", description: "Search for files" },
+        ];
+        mockResources = [
+            { name: "files", uri: "file://", description: "File system access" },
+        ];
+    } else if (serverName.includes("github")) {
+        mockTools = [
+            { name: "searchRepositories", description: "Search GitHub repositories" },
+            { name: "getFile", description: "Get file contents from repo" },
+            { name: "listIssues", description: "List repository issues" },
+            { name: "createPullRequest", description: "Create a pull request" },
+        ];
+    } else if (serverName.includes("brave") || serverName.includes("search")) {
+        mockTools = [
+            { name: "search", description: "Search the web" },
+            { name: "getPage", description: "Get page content" },
+        ];
+    } else if (serverName.includes("slack")) {
+        mockTools = [
+            { name: "sendMessage", description: "Send a message to a channel" },
+            { name: "listChannels", description: "List available channels" },
+            { name: "searchMessages", description: "Search message history" },
+        ];
+    } else {
+        // Generic tools for unknown servers
+        mockTools = [
+            { name: "execute", description: "Execute server command" },
+            { name: "status", description: "Get server status" },
+        ];
+    }
+
+    return {
+        success: true,
+        connectionName: name,
+        connectionType: "mcp",
+        latency: Math.floor(100 + Math.random() * 400),
+        serverInfo: {
+            name: name,
+            version: "1.0.0",
+            protocolVersion: "2024-11-05",
+        },
+        mcpCapabilities: {
+            tools: mockTools,
+            resources: mockResources.length > 0 ? mockResources : undefined,
+            prompts: [],
+        },
+    };
 }
 
 // Popular MCP server templates
@@ -149,6 +235,11 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
     const [inputMode, setInputMode] = useState<"form" | "json">("form");
     const [copied, setCopied] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
+    
+    // Test connection state
+    const [step, setStep] = useState<"form" | "testing" | "result">("form");
+    const [testResult, setTestResult] = useState<ConnectionTestData | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     const addEnvVar = useCallback(() => {
         setEnvVars((prev) => [...prev, { key: "", value: "" }]);
@@ -268,10 +359,8 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
         setTimeout(() => setCopied(false), 2000);
     }, [generateJsonConfig]);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        const config: MCPConfig = {
+    const buildConfig = useCallback((): MCPConfig => {
+        return {
             type: transportType,
             ...(transportType === "stdio"
                 ? {
@@ -287,7 +376,32 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
                 }),
             authToken: authToken || undefined,
         };
+    }, [transportType, command, args, envVars, sseUrl, authToken]);
 
+    const handleTestConnection = useCallback(async () => {
+        setStep("testing");
+        setIsLoading(true);
+        setTestResult(null);
+
+        try {
+            const config = buildConfig();
+            const result = await testMCPConnection(name, config);
+            setTestResult(result);
+        } catch {
+            setTestResult({
+                success: false,
+                connectionName: name,
+                connectionType: "mcp",
+                error: "Failed to connect to MCP server. Please check your configuration.",
+            });
+        } finally {
+            setIsLoading(false);
+            setStep("result");
+        }
+    }, [name, buildConfig]);
+
+    const handleConfirmConnection = useCallback(() => {
+        const config = buildConfig();
         onSubmit({
             name,
             type: "mcp",
@@ -295,7 +409,34 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
             lastSync: new Date(),
             config,
         });
+    }, [name, buildConfig, onSubmit]);
+
+    const handleRetry = useCallback(() => {
+        handleTestConnection();
+    }, [handleTestConnection]);
+
+    const handleBack = useCallback(() => {
+        setStep("form");
+        setTestResult(null);
+    }, []);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        handleTestConnection();
     };
+
+    // Show test result view
+    if (step === "testing" || step === "result") {
+        return (
+            <ConnectionTestResult
+                data={testResult}
+                isLoading={isLoading}
+                onConfirm={handleConfirmConnection}
+                onRetry={handleRetry}
+                onCancel={handleBack}
+            />
+        );
+    }
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -639,7 +780,8 @@ export function MCPConnectionForm({ onSubmit, onCancel }: MCPConnectionFormProps
                     Cancel
                 </Button>
                 <Button type="submit" disabled={!name}>
-                    Add Server
+                    <Zap className="mr-2 h-4 w-4" />
+                    Test Connection
                 </Button>
             </div>
         </form>
