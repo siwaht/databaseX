@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mockDbClient } from "@/lib/db/client";
 import { searchQuerySchema, validateRequestBody } from "@/lib/validations/api";
+import { logger } from "@/lib/logger";
 
 export async function POST(request: Request) {
     const validation = await validateRequestBody(request, searchQuerySchema);
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json(results);
     } catch (error) {
-        console.error("POST /api/search failed:", error);
+        logger.error("POST /api/search failed", error, { collection, hasVector: !!query.vector, hasText: !!query.text });
 
         // Check for collection not found
         if (

@@ -5,6 +5,7 @@ import {
     deleteDocumentsSchema,
     validateRequestBody,
 } from "@/lib/validations/api";
+import { logger } from "@/lib/logger";
 
 export async function POST(request: Request) {
     const validation = await validateRequestBody(request, addDocumentsSchema);
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
         const ids = await mockDbClient.addDocuments(collection, documents);
         return NextResponse.json({ ids }, { status: 201 });
     } catch (error) {
-        console.error("POST /api/documents failed:", error);
+        logger.error("POST /api/documents failed", error, { collection, count: documents.length });
 
         // Check for collection not found
         if (
@@ -58,7 +59,7 @@ export async function DELETE(request: Request) {
         await mockDbClient.deleteDocuments(collection, ids);
         return NextResponse.json({ ok: true, deleted: ids.length });
     } catch (error) {
-        console.error("DELETE /api/documents failed:", error);
+        logger.error("DELETE /api/documents failed", error, { collection, count: ids.length });
 
         // Check for collection not found
         if (

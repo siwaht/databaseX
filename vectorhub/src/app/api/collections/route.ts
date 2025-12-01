@@ -5,13 +5,14 @@ import {
     validateRequestBody,
 } from "@/lib/validations/api";
 import type { CreateCollectionConfig } from "@/lib/db/adapters/base";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
     try {
         const collections = await mockDbClient.listCollections();
         return NextResponse.json(collections);
     } catch (error) {
-        console.error("GET /api/collections failed:", error);
+        logger.error("GET /api/collections failed", error);
         return NextResponse.json(
             {
                 code: "INTERNAL_ERROR",
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json(created, { status: 201 });
     } catch (error) {
-        console.error("POST /api/collections failed:", error);
+        logger.error("POST /api/collections failed", error, { collection: data.name });
 
         // Check for duplicate collection error
         if (

@@ -81,6 +81,53 @@ export const searchQuerySchema = z.object({
 
 export type SearchQueryInput = z.infer<typeof searchQuerySchema>;
 
+// MCP connection schemas
+export const createMcpConnectionSchema = z.object({
+    name: z
+        .string()
+        .min(1, "Name is required")
+        .max(100, "Name must be 100 characters or less"),
+    endpoint: z
+        .string()
+        .url("Endpoint must be a valid URL")
+        .max(512, "Endpoint URL is too long"),
+    tags: z
+        .array(
+            z
+                .string()
+                .min(1, "Tag cannot be empty")
+                .max(64, "Tag must be 64 characters or less")
+        )
+        .max(20, "A maximum of 20 tags is allowed")
+        .optional(),
+});
+
+export type CreateMcpConnectionInput = z.infer<typeof createMcpConnectionSchema>;
+
+// Webhook connection schemas
+export const createWebhookConnectionSchema = z.object({
+    name: z
+        .string()
+        .min(1, "Name is required")
+        .max(100, "Name must be 100 characters or less"),
+    url: z
+        .string()
+        .url("URL must be a valid URL")
+        .max(512, "URL is too long"),
+    eventTypes: z
+        .array(
+            z
+                .string()
+                .min(1, "Event type cannot be empty")
+                .max(64, "Event type must be 64 characters or less")
+        )
+        .min(1, "At least one event type is required")
+        .max(50, "A maximum of 50 event types is allowed"),
+    secretConfigured: z.boolean().default(false),
+});
+
+export type CreateWebhookConnectionInput = z.infer<typeof createWebhookConnectionSchema>;
+
 // Error response helper
 export interface ApiError {
     code: string;

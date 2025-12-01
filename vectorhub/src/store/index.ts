@@ -19,6 +19,8 @@ export const useStore = create<StoreState>()(
             // Only persist serializable domain data, not any future derived values or helpers
             partialize: (state: StoreState) => ({
                 connections: state.connections,
+                mcpConnections: state.mcpConnections,
+                webhookConnections: state.webhookConnections,
                 collections: state.collections,
                 documents: state.documents,
             }),

@@ -8,11 +8,13 @@ export type VectorDBType =
     | 'redis'
     | 'upstash';
 
+export type ConnectionStatus = 'connected' | 'disconnected' | 'error';
+
 export interface ConnectionConfig {
     id: string;
     name: string;
     type: VectorDBType;
-    status: 'connected' | 'disconnected' | 'error';
+    status: ConnectionStatus;
     lastSync: Date;
     config:
     | ChromaDBConfig
@@ -79,4 +81,25 @@ export interface RedisConfig {
 export interface UpstashConfig {
     url: string;
     token: string;
+}
+
+// MCP Connections represent integrations that follow the Model Context Protocol.
+export interface McpConnection {
+    id: string;
+    name: string;
+    endpoint: string;
+    status: ConnectionStatus;
+    lastSync: Date;
+    tags?: string[];
+}
+
+// Webhook connections represent outbound HTTP callbacks for VectorHub events.
+export interface WebhookConnection {
+    id: string;
+    name: string;
+    url: string;
+    eventTypes: string[];
+    status: ConnectionStatus;
+    lastDelivery?: Date;
+    secretConfigured: boolean;
 }
