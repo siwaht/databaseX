@@ -2,11 +2,23 @@
 
 ## Overview
 
-VectorHub is a modern, production-ready vector database management interface built with Next.js 14. It provides a unified UI for managing, searching, and analyzing vector databases with support for multiple database providers including ChromaDB, Pinecone, Qdrant, Weaviate, MongoDB Atlas, Supabase, Redis, and Upstash.
+VectorHub is a modern, production-ready vector database management interface built with Next.js 14. It provides a unified UI for managing, searching, and analyzing vector databases with support for multiple database providers including ChromaDB, Pinecone, Qdrant, Weaviate, Redis, and Upstash, plus **Webhook** and **MCP (Model Context Protocol)** integrations for external data sync.
 
-**Current State**: The project has been successfully imported and configured to run in the Replit environment. The development server is running on port 5000 with proper proxy configuration.
+**Current State**: Successfully imported and fully functional in Replit. Development server running on port 5000. All bugs fixed. New webhook and MCP connection types fully implemented and integrated with the upload flow.
 
 ## Recent Changes
+
+**December 1, 2025 - Webhook & MCP Integration**
+- ✅ Added Webhook connection type with customizable endpoints, authentication (API Key, Bearer, Basic), and retry logic
+- ✅ Added MCP connection type with server URL configuration and capability toggles
+- ✅ Created WebhookAdapter for HTTP-based vector operations (POST/PUT/DELETE endpoints)
+- ✅ Created MCPAdapter for JSON-RPC protocol vector operations
+- ✅ Enhanced upload page with multi-connection sync selector
+- ✅ Added automatic document syncing to selected webhook/MCP connections on file/text upload
+- ✅ New `/api/documents/sync` endpoint for cross-connection data synchronization
+- ✅ Removed unused mongodb and supabase adapter files with missing dependencies
+- ✅ Updated ConnectionCard to display webhook and MCP connection icons
+- ✅ Fixed all module import errors - app now compiles cleanly
 
 **December 1, 2025 - Initial Replit Setup**
 - Installed Node.js 20 and all npm dependencies
