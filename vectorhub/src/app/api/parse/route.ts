@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 
 export const runtime = 'nodejs';
 
-// @ts-ignore
-import pdf from "pdf-parse";
-// @ts-ignore
-import mammoth from "mammoth";
-
 export async function POST(request: Request) {
     try {
+        // Dynamically import libraries to avoid build-time resolution issues
+        // @ts-ignore
+        const pdfParse = (await import("pdf-parse")).default;
+        // @ts-ignore
+        const mammoth = (await import("mammoth"));
+
         const formData = await request.formData();
         const file = formData.get("file") as File;
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
         let metadata = {};
 
         if (file.type === "application/pdf") {
-            const data = await pdf(buffer);
+            const data = await pdfParse(buffer);
             text = data.text;
             metadata = {
                 info: data.info,
