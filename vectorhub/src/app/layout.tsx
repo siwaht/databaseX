@@ -3,6 +3,7 @@ import { JetBrains_Mono, Outfit } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { SessionProvider } from "@/components/providers/session-provider";
 import { Toaster } from "@/components/ui/sonner";
 
 const outfit = Outfit({
@@ -57,8 +58,10 @@ export default function RootLayout({
                     disableTransitionOnChange
                     themes={["light", "dark"]}
                 >
-                    {children}
-                    <Toaster position="bottom-right" richColors closeButton />
+                    <SessionProvider>
+                        {children}
+                        <Toaster position="bottom-right" richColors closeButton />
+                    </SessionProvider>
                 </ThemeProvider>
             </body>
         </html>

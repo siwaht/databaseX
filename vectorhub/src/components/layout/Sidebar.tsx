@@ -14,7 +14,7 @@ import {
     Zap,
     LogOut,
     User,
-    Key,
+    Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSession, signOut } from "next-auth/react";
 
 const navItems = [
     { href: "/", icon: Zap, label: "Dashboard" },
@@ -42,11 +43,18 @@ const bottomNavItems = [
 
 export function Sidebar() {
     const pathname = usePathname();
+    const { data: session } = useSession();
+    const user = session?.user;
 
     const isActive = (href: string) => {
         if (href === "/") return pathname === "/";
         return pathname.startsWith(href);
     };
+
+    const displayedNavItems = [...navItems];
+    if (user?.role === 'admin') {
+        displayedNavItems.splice(1, 0, { href: "/users", icon: Users, label: "Users" });
+    }
 
     return (
         <div className="flex h-full w-64 flex-col border-r bg-card/50 backdrop-blur-sm">
@@ -72,7 +80,7 @@ export function Sidebar() {
                         Main
                     </span>
                 </div>
-                {navItems.map((item) => {
+                {displayedNavItems.map((item) => {
                     const active = isActive(item.href);
                     return (
                         <Link key={item.href} href={item.href}>
@@ -165,10 +173,10 @@ export function Sidebar() {
                             <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center ring-1 ring-primary/10">
                                 <User className="h-4 w-4 text-primary" />
                             </div>
-                            <div className="flex flex-col items-start">
-                                <span className="text-sm font-medium">Admin User</span>
-                                <span className="text-xs text-muted-foreground">
-                                    admin@vectorhub.io
+                            <div className="flex flex-col items-start text-left overflow-hidden">
+                                <span className="text-sm font-medium truncate w-full">{user?.name || "Guest"}</span>
+                                <span className="text-xs text-muted-foreground truncate w-full">
+                                    {user?.email || "Not logged in"}
                                 </span>
                             </div>
                         </Button>
@@ -185,7 +193,10 @@ export function Sidebar() {
                             Settings
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive">
+                        <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => signOut({ callbackUrl: "/login" })}
+                        >
                             <LogOut className="mr-2 h-4 w-4" />
                             Log out
                         </DropdownMenuItem>
