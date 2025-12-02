@@ -106,10 +106,21 @@ export default function SearchPage() {
         return undefined;
     };
 
+    // Built-in local agent for testing/demo
+    const builtInAgent: AIAgent = {
+        id: "builtin-assistant",
+        name: "VectorHub Assistant",
+        type: "mcp", // Treat as MCP for UI purposes
+        status: "connected",
+        endpoint: "local",
+    };
+
     // Build agents list from:
-    // 1. Main connections array (type === "mcp" or "webhook")
-    // 2. Legacy mcpConnections and webhookConnections arrays
+    // 1. Built-in agent
+    // 2. Main connections array (type === "mcp" or "webhook")
+    // 3. Legacy mcpConnections and webhookConnections arrays
     const agents: AIAgent[] = [
+        builtInAgent,
         // MCP connections from main connections array
         ...connections
             .filter((c) => c.type === "mcp")

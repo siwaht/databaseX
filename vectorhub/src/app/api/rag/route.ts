@@ -409,6 +409,46 @@ Error: ${errorMsg}${helpfulHint}
     return JSON.stringify(data, null, 2);
 }
 
+// Handle local built-in agent requests
+async function handleLocalAgent(
+    query: string,
+    context: SearchResult[]
+): Promise<string> {
+    const queryLower = query.toLowerCase();
+
+    // Tool: Calculator
+    // Detects math expressions like "calculate 5 * 10" or "what is 5 + 5"
+    if (queryLower.includes("calculate") || queryLower.match(/[\d]+\s*[\+\-\*\/]\s*[\d]+/)) {
+        try {
+            // Extract the math expression safely
+            // This regex looks for numbers and operators
+            const mathMatch = query.match(/(\d+(?:\.\d+)?\s*[\+\-\*\/]\s*\d+(?:\.\d+)?(?:\s*[\+\-\*\/]\s*\d+(?:\.\d+)?)*)/);
+
+            if (mathMatch) {
+                const expression = mathMatch[0];
+                // Safe evaluation using Function constructor with strict limitations
+                // In a real production env, use a math parser library like mathjs
+                const result = new Function(`return ${expression}`)();
+                return `I used the **calculator** tool to solve that.\n\nResult: **${result}**`;
+            }
+        } catch (e) {
+            // Fall through to normal response if calculation fails
+        }
+    }
+
+    // Tool: Time
+    if (queryLower.includes("time") || queryLower.includes("clock")) {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const dateString = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        return `I checked the **system clock** for you.\n\nCurrent Time: **${timeString}**\nDate: **${dateString}**`;
+    }
+
+    // Default RAG response if no tools matched
+    return generateResponse(query, context, "VectorHub Assistant");
+}
+
 // Extract HTTP URL from config (handles supergateway and other patterns)
 function extractHttpUrl(agent: RAGRequest["agent"]): string | undefined {
     if (!agent) return undefined;
@@ -530,6 +570,10 @@ export async function POST(request: Request) {
                     response += `\n\n⚠️ *Could not reach ${agentName}.*\n*Error: ${errorMsg}*`;
                     agentUsed = `${agentName} (fallback)`;
                 }
+            } else if (agent.endpoint === "local") {
+                // Handle built-in local agent
+                response = await handleLocalAgent(query, context);
+                agentUsed = "VectorHub Assistant";
             } else {
                 // No endpoint - use vector search only
                 response = generateResponse(query, context, "Vector Search");
