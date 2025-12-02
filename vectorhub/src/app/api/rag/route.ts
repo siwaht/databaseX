@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { dbClient } from "@/lib/db/client";
 import { logger } from "@/lib/logger";
 import type { SearchResult } from "@/lib/db/adapters/base";
 import OpenAI from "openai";
+import { MongoClient } from "mongodb";
+import { generateEmbedding } from "@/lib/embeddings";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 // This is using Replit's AI Integrations service, which provides OpenAI-compatible API access without requiring your own OpenAI API key.
@@ -17,6 +18,12 @@ interface RAGRequest {
     topK?: number;
     minScore?: number;
     history?: { role: string; content: string }[];
+    connectionConfig?: {
+        connectionString: string;
+        database: string;
+        vectorSearchIndexName?: string;
+        embeddingField?: string;
+    };
     agent?: {
         type: "mcp" | "webhook" | "mock";
         endpoint?: string;
@@ -32,6 +39,66 @@ interface RAGRequest {
             authToken?: string;
         };
     };
+}
+
+// Search MongoDB Atlas using vector search
+async function searchMongoDB(
+    connectionString: string,
+    database: string,
+    collection: string,
+    query: string,
+    topK: number,
+    minScore: number,
+    vectorSearchIndexName: string = "vector_index",
+    embeddingField: string = "embedding"
+): Promise<SearchResult[]> {
+    const client = new MongoClient(connectionString);
+    
+    try {
+        await client.connect();
+        const db = client.db(database);
+        const col = db.collection(collection);
+        
+        // Generate embedding for the query
+        const vector = await generateEmbedding(query);
+        
+        // Use MongoDB Atlas Vector Search
+        const pipeline = [
+            {
+                $vectorSearch: {
+                    index: vectorSearchIndexName,
+                    path: embeddingField,
+                    queryVector: vector,
+                    numCandidates: topK * 10,
+                    limit: topK,
+                },
+            },
+            {
+                $project: {
+                    _id: 1,
+                    content: 1,
+                    metadata: 1,
+                    score: { $meta: "vectorSearchScore" },
+                },
+            },
+            {
+                $match: {
+                    score: { $gte: minScore },
+                },
+            },
+        ];
+        
+        const results = await col.aggregate(pipeline).toArray();
+        
+        return results.map((doc) => ({
+            id: doc._id.toString(),
+            score: doc.score,
+            content: doc.content || "",
+            metadata: doc.metadata || {},
+        }));
+    } finally {
+        await client.close();
+    }
 }
 
 interface RAGResponse {
@@ -531,7 +598,7 @@ function extractAuthHeader(agent: RAGRequest["agent"]): string | undefined {
 export async function POST(request: Request) {
     try {
         const body: RAGRequest = await request.json();
-        const { query, collection, topK = 5, minScore = 0.5, agent } = body;
+        const { query, collection, topK = 5, minScore = 0.5, agent, connectionConfig } = body;
 
         if (!query) {
             return NextResponse.json(
@@ -548,14 +615,25 @@ export async function POST(request: Request) {
 
         if (collection) {
             try {
-                context = await dbClient.search(collection, {
-                    text: query,
-                    topK,
-                    minScore,
-                    includeContent: true,
-                    includeMetadata: true,
-                });
-                logger.info(`Retrieved ${context.length} documents from collection "${collection}"`);
+                // Use provided connection config or fallback to environment variable
+                const connString = connectionConfig?.connectionString || process.env.MONGODB_URI;
+                const database = connectionConfig?.database || "Knowledge_base";
+                
+                if (connString) {
+                    context = await searchMongoDB(
+                        connString,
+                        database,
+                        collection,
+                        query,
+                        topK,
+                        minScore,
+                        connectionConfig?.vectorSearchIndexName || "vector_index",
+                        connectionConfig?.embeddingField || "embedding"
+                    );
+                    logger.info(`Retrieved ${context.length} documents from collection "${collection}"`);
+                } else {
+                    logger.warn("No MongoDB connection string available");
+                }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : "Unknown error";
                 logger.warn(`Collection search failed: ${errorMessage}`);
