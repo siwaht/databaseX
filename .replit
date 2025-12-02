@@ -33,7 +33,16 @@ outputType = "webview"
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 39965
+externalPort = 3000
+
 [deployment]
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "cd vectorhub && npm run start"]
 build = ["bash", "-c", "cd vectorhub && npm run build"]
+
+[userenv]
+
+[userenv.shared]
+NEXTAUTH_SECRET = "Gcl3+D383bwFoKDb5g5ZI7j/jC7htAFf2LDFYXeWpmU="
