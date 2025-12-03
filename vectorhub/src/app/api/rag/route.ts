@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
-import { dbClient } from "@/lib/db/client";
 import { logger } from "@/lib/logger";
 import type { SearchResult } from "@/lib/db/adapters/base";
+import OpenAI from "openai";
+import { MongoClient } from "mongodb";
+import { generateEmbedding } from "@/lib/embeddings";
+
+// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+// This is using Replit's AI Integrations service, which provides OpenAI-compatible API access without requiring your own OpenAI API key.
+const openai = new OpenAI({
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+});
 
 interface RAGRequest {
     query: string;
@@ -9,6 +18,12 @@ interface RAGRequest {
     topK?: number;
     minScore?: number;
     history?: { role: string; content: string }[];
+    connectionConfig?: {
+        connectionString: string;
+        database: string;
+        vectorSearchIndexName?: string;
+        embeddingField?: string;
+    };
     agent?: {
         type: "mcp" | "webhook" | "mock";
         endpoint?: string;
@@ -26,14 +41,151 @@ interface RAGRequest {
     };
 }
 
+// Search MongoDB Atlas using vector search
+async function searchMongoDB(
+    connectionString: string,
+    database: string,
+    collection: string,
+    query: string,
+    topK: number,
+    minScore: number,
+    vectorSearchIndexName: string = "vector_index",
+    embeddingField: string = "embedding"
+): Promise<SearchResult[]> {
+    const client = new MongoClient(connectionString);
+
+    try {
+        await client.connect();
+        const db = client.db(database);
+        const col = db.collection(collection);
+
+        // Generate embedding for the query
+        const vector = await generateEmbedding(query);
+
+        // Use MongoDB Atlas Vector Search
+        const pipeline = [
+            {
+                $vectorSearch: {
+                    index: vectorSearchIndexName,
+                    path: embeddingField,
+                    queryVector: vector,
+                    numCandidates: topK * 10,
+                    limit: topK,
+                },
+            },
+            {
+                $project: {
+                    _id: 1,
+                    content: 1,
+                    metadata: 1,
+                    score: { $meta: "vectorSearchScore" },
+                },
+            },
+            {
+                $match: {
+                    score: { $gte: minScore },
+                },
+            },
+        ];
+
+        const results = await col.aggregate(pipeline).toArray();
+
+        return results.map((doc) => ({
+            id: doc._id.toString(),
+            score: doc.score,
+            content: doc.content || "",
+            metadata: doc.metadata || {},
+        }));
+    } finally {
+        await client.close();
+    }
+}
+
 interface RAGResponse {
     response: string;
     context: SearchResult[];
     agentUsed: string;
 }
 
-// Generate an AI-like response based on query and context
-function generateResponse(
+// Generate an AI response using OpenAI based on query and context
+async function generateAIResponse(
+    query: string,
+    context: SearchResult[],
+    agentName?: string,
+    history?: { role: string; content: string }[]
+): Promise<string> {
+    try {
+        // Build context string from retrieved documents
+        let contextStr = "";
+        if (context.length > 0) {
+            contextStr = context
+                .map((c, i) => {
+                    const source = (c.metadata?.source as string) || `Document ${i + 1}`;
+                    return `[Source: ${source}, Score: ${(c.score * 100).toFixed(0)}%]\n${c.content}`;
+                })
+                .join("\n\n---\n\n");
+        }
+
+        // Build message history for chat
+        const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+            {
+                role: "system",
+                content: `You are VectorHub Assistant, a helpful AI that answers questions based on the user's documents stored in a vector database.
+
+${context.length > 0 ? `You have access to the following relevant documents retrieved from the database:
+
+${contextStr}
+
+Use these documents to answer the user's question. If the information in the documents is relevant, cite the sources. If the documents don't contain enough information to fully answer, say so and provide what you can based on the available context.` : `No documents were found matching the user's query. Let them know this and offer helpful suggestions like:
+- Uploading relevant documents on the Upload page
+- Selecting a different collection
+- Lowering the minimum similarity score
+- Trying different search terms`}
+
+Be concise, helpful, and conversational. Format your responses using markdown when appropriate.
+
+*${agentName || "Vector Search"}*`
+            }
+        ];
+
+        // Add conversation history if provided
+        if (history && history.length > 0) {
+            for (const msg of history.slice(-10)) { // Keep last 10 messages for context
+                if (msg.role === "user" || msg.role === "assistant") {
+                    messages.push({
+                        role: msg.role as "user" | "assistant",
+                        content: msg.content
+                    });
+                }
+            }
+        }
+
+        // Add current query
+        messages.push({
+            role: "user",
+            content: query
+        });
+
+        // Call OpenAI API
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini", // Using a faster, cheaper model for chat
+            messages,
+            max_tokens: 1024,
+            temperature: 0.7,
+        });
+
+        const aiResponse = response.choices[0]?.message?.content || "I couldn't generate a response. Please try again.";
+
+        return aiResponse;
+    } catch (error) {
+        logger.error("OpenAI API call failed", error instanceof Error ? error : undefined);
+        // Fallback to simple response if AI fails
+        return generateFallbackResponse(query, context, agentName, history);
+    }
+}
+
+// Fallback response when AI is unavailable
+function generateFallbackResponse(
     query: string,
     context: SearchResult[],
     agentName?: string,
@@ -108,10 +260,6 @@ ${context.length > 0 ? `\n✅ Found ${context.length} document(s) matching your 
 
     // If we have context, provide a more intelligent response
     if (context.length > 0) {
-        const topDoc = context[0];
-        const source = (topDoc.metadata?.source as string) || "your documents";
-        const preview = topDoc.content?.slice(0, 500) || "";
-
         const contextSummary = context
             .slice(0, 3)
             .map((c, i) => {
@@ -139,10 +287,9 @@ ${contextSummary}
 However, I don't have any documents to search through yet, or no documents matched your query.
 
 **To get better results:**
-1. 📤 Upload relevant documents on the Upload page
-2. 📁 Select a collection from the Data Source panel
-3. 🔧 Lower the "Min similarity score" to find more results
-4. 🤖 Connect an AI agent (n8n, Make.com) for intelligent responses
+1. Upload relevant documents on the Upload page
+2. Select a collection from the Data Source panel
+3. Lower the "Min similarity score" to find more results
 
 *${name}*`;
 }
@@ -229,10 +376,10 @@ async function callHttpAgent(
         logger.info("Detected n8n MCP management server, using workflow execution flow");
 
         try {
-            // Step 2a: Search for workflows
+            // Step 2a: Search for workflows (try without filters first to get all, then filter)
             const searchResponse = await mcpRequest(url, "tools/call", {
                 name: "search_workflows",
-                arguments: { query: "", active: true },
+                arguments: { activeOnly: true },
             }, headers);
 
             if (searchResponse.error) {
@@ -243,23 +390,66 @@ async function callHttpAgent(
             let workflows: { id: string; name: string }[] = [];
             const searchResult = searchResponse.result;
 
+            logger.info("n8n search_workflows response", { result: searchResult });
+
             if (searchResult?.content) {
                 const contentStr = Array.isArray(searchResult.content)
-                    ? searchResult.content.map((c: any) => c.text || "").join("")
+                    ? searchResult.content.map((c: any) => c.text || c.content || "").join("")
                     : typeof searchResult.content === "string" ? searchResult.content : JSON.stringify(searchResult.content);
 
-                // Try to parse workflow IDs from the response
-                const idMatches = contentStr.match(/ID:\s*(\w+)/g) || [];
-                const nameMatches = contentStr.match(/Name:\s*([^\n,]+)/g) || [];
+                logger.info("Parsed content string", { preview: contentStr.substring(0, 500) });
 
-                for (let i = 0; i < idMatches.length; i++) {
-                    const id = idMatches[i]?.replace("ID:", "").trim();
-                    const name = nameMatches[i]?.replace("Name:", "").trim() || `Workflow ${i + 1}`;
-                    if (id) {
-                        workflows.push({ id, name });
+                // Try to parse as JSON first (n8n might return JSON array)
+                try {
+                    const jsonMatch = contentStr.match(/\[[\s\S]*\]/);
+                    if (jsonMatch) {
+                        const parsed = JSON.parse(jsonMatch[0]);
+                        if (Array.isArray(parsed)) {
+                            workflows = parsed.map((w: any) => ({
+                                id: w.id || w.workflowId || "",
+                                name: w.name || w.title || `Workflow`,
+                            })).filter((w: any) => w.id);
+                            logger.info(`Parsed ${workflows.length} workflows from JSON`);
+                        }
+                    }
+                } catch {
+                    // Not JSON, try regex patterns
+                }
+
+                // Fallback to regex patterns if JSON parsing didn't work
+                if (workflows.length === 0) {
+                    // Try pattern: ID: xxx, Name: xxx
+                    const idMatches = contentStr.match(/ID:\s*(\w+)/gi) || [];
+                    const nameMatches = contentStr.match(/Name:\s*([^\n,\]]+)/gi) || [];
+
+                    for (let i = 0; i < idMatches.length; i++) {
+                        const id = idMatches[i]?.replace(/ID:\s*/i, "").trim();
+                        const name = nameMatches[i]?.replace(/Name:\s*/i, "").trim() || `Workflow ${i + 1}`;
+                        if (id) {
+                            workflows.push({ id, name });
+                        }
+                    }
+
+                    // Also try pattern: "id": "xxx" or id: xxx
+                    if (workflows.length === 0) {
+                        const altIdMatches = contentStr.match(/"id"\s*:\s*"([^"]+)"/gi) ||
+                            contentStr.match(/id\s*:\s*(\w+)/gi) || [];
+                        const altNameMatches = contentStr.match(/"name"\s*:\s*"([^"]+)"/gi) || [];
+
+                        for (let i = 0; i < altIdMatches.length; i++) {
+                            const idMatch = altIdMatches[i].match(/:\s*"?([^"]+)"?/);
+                            const nameMatch = altNameMatches[i]?.match(/:\s*"([^"]+)"/);
+                            const id = idMatch?.[1]?.trim();
+                            const name = nameMatch?.[1]?.trim() || `Workflow ${i + 1}`;
+                            if (id) {
+                                workflows.push({ id, name });
+                            }
+                        }
                     }
                 }
             }
+
+            logger.info(`Found ${workflows.length} active workflows`);
 
             if (workflows.length === 0) {
                 return `No active workflows found in n8n. Please activate a workflow to use for RAG queries.\n\n**Available n8n MCP tools:**\n${tools.map(t => `- ${t.name}: ${t.description || ""}`).join("\n")}`;
@@ -410,7 +600,29 @@ Error: ${errorMsg}${helpfulHint}
         throw new Error(`Agent returned ${webhookResponse.status}: ${errorText}`);
     }
 
-    const data = await webhookResponse.json();
+    // Get raw response text first to handle empty responses
+    const rawText = await webhookResponse.text();
+    logger.info(`Webhook raw response (${rawText.length} chars): ${rawText.substring(0, 500)}`);
+
+    // Handle empty response
+    if (!rawText || rawText.trim() === "") {
+        throw new Error(`n8n webhook returned an empty response. Please check your n8n workflow:
+1. Make sure your workflow has a "Respond to Webhook" node connected to the output
+2. The response node should return JSON with a "response", "message", or "output" field
+3. Check that your workflow execution path reaches the response node
+
+Example response format: { "response": "Your answer here" }`);
+    }
+
+    // Try to parse as JSON
+    let data;
+    try {
+        data = JSON.parse(rawText);
+    } catch (parseError) {
+        // If not JSON, return the raw text as the response
+        logger.warn(`Response is not JSON, using raw text: ${rawText.substring(0, 200)}`);
+        return rawText;
+    }
 
     // Handle various response formats
     const response =
@@ -469,8 +681,8 @@ async function handleLocalAgent(
         return `I checked the **system clock** for you.\n\nCurrent Time: **${timeString}**\nDate: **${dateString}**`;
     }
 
-    // Default RAG response if no tools matched
-    return generateResponse(query, context, "VectorHub Assistant", history);
+    // Default RAG response if no tools matched - use AI
+    return generateAIResponse(query, context, "VectorHub Assistant", history);
 }
 
 // Extract HTTP URL from config (handles supergateway and other patterns)
@@ -533,7 +745,7 @@ function extractAuthHeader(agent: RAGRequest["agent"]): string | undefined {
 export async function POST(request: Request) {
     try {
         const body: RAGRequest = await request.json();
-        const { query, collection, topK = 5, minScore = 0.5, agent, history } = body;
+        const { query, collection, topK = 5, minScore = 0.5, agent, history, connectionConfig } = body;
 
         if (!query) {
             return NextResponse.json(
@@ -550,14 +762,25 @@ export async function POST(request: Request) {
 
         if (collection) {
             try {
-                context = await dbClient.search(collection, {
-                    text: query,
-                    topK,
-                    minScore,
-                    includeContent: true,
-                    includeMetadata: true,
-                });
-                logger.info(`Retrieved ${context.length} documents from collection "${collection}"`);
+                // Use provided connection config or fallback to environment variable
+                const connString = connectionConfig?.connectionString || process.env.MONGODB_URI;
+                const database = connectionConfig?.database || "Knowledge_base";
+
+                if (connString) {
+                    context = await searchMongoDB(
+                        connString,
+                        database,
+                        collection,
+                        query,
+                        topK,
+                        minScore,
+                        connectionConfig?.vectorSearchIndexName || "vector_index",
+                        connectionConfig?.embeddingField || "embedding"
+                    );
+                    logger.info(`Retrieved ${context.length} documents from collection "${collection}"`);
+                } else {
+                    logger.warn("No MongoDB connection string available");
+                }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : "Unknown error";
                 logger.warn(`Collection search failed: ${errorMessage}`);
@@ -574,8 +797,8 @@ export async function POST(request: Request) {
         const agentName = agent?.name || "Vector Search";
 
         if (!agent || agent.type === "mock") {
-            // Use built-in response generator
-            response = generateResponse(query, context, "Vector Search", history);
+            // Use built-in AI response generator with OpenAI
+            response = await generateAIResponse(query, context, "Vector Search", history);
             agentUsed = "Vector Search";
         } else {
             // Extract endpoint and auth from agent config
@@ -594,13 +817,13 @@ export async function POST(request: Request) {
                 } catch (err) {
                     const errorMsg = err instanceof Error ? err.message : "Unknown error";
                     logger.error(`Agent call failed (${agent.type}): ${errorMsg}`);
-                    response = generateResponse(query, context, agentName, history);
+                    response = await generateAIResponse(query, context, agentName, history);
                     response += `\n\n⚠️ *Could not reach ${agentName}.*\n*Error: ${errorMsg}*`;
                     agentUsed = `${agentName} (fallback)`;
                 }
             } else {
-                // No endpoint - use vector search only
-                response = generateResponse(query, context, "Vector Search", history);
+                // No endpoint - use AI response
+                response = await generateAIResponse(query, context, "Vector Search", history);
                 response += `\n\n💡 *No HTTP endpoint configured for ${agentName}. Please add a webhook URL in the connection settings.*`;
                 agentUsed = "Vector Search";
             }
@@ -624,4 +847,3 @@ export async function POST(request: Request) {
         );
     }
 }
-

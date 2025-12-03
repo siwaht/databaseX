@@ -183,6 +183,21 @@ export default function SearchPage() {
         return undefined;
     }, [connections]);
 
+    // Get MongoDB connection config for RAG search
+    const getMongoDBConnectionConfig = useCallback(() => {
+        const mongoConnection = connections.find((c) => c.type === "mongodb_atlas");
+        if (mongoConnection && mongoConnection.config) {
+            const config = mongoConnection.config as any;
+            return {
+                connectionString: config.connectionString,
+                database: config.database,
+                vectorSearchIndexName: config.vectorSearchIndexName,
+                embeddingField: config.embeddingField,
+            };
+        }
+        return undefined;
+    }, [connections]);
+
     const handleSendMessage = useCallback(
         async (
             message: string,
@@ -198,6 +213,7 @@ export default function SearchPage() {
                         collection: selectedCollection || undefined,
                         topK: topK[0],
                         minScore: minScore[0],
+                        connectionConfig: getMongoDBConnectionConfig(),
                         history: history.map(msg => ({
                             role: msg.role,
                             content: msg.content
@@ -230,7 +246,7 @@ export default function SearchPage() {
                 return { response: `Error: ${errorMessage}`, context: [] };
             }
         },
-        [selectedCollection, topK, minScore, getAgentConfig]
+        [selectedCollection, topK, minScore, getAgentConfig, getMongoDBConnectionConfig]
     );
 
     const connectedAgentsCount = agents.filter((a) => a.status === "connected").length;
