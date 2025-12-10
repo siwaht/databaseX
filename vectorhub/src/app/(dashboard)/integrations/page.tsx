@@ -353,6 +353,20 @@ export default function IntegrationsPage() {
         }
     };
 
+    const handleSavePicaKey = useCallback(async (key: string, value: string) => {
+        if (!value) return;
+        try {
+            await fetch("/api/integrations/keys", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key, value }),
+            });
+            // Debounce validation? For now just silent save.
+        } catch (error) {
+            console.error("Failed to save Pica key", error);
+        }
+    }, []);
+
     return (
         <motion.div
             className="space-y-6"
@@ -496,7 +510,72 @@ export default function IntegrationsPage() {
                                         )}
                                     </div>
                                 </div>
-                                <div className="flex justify-end">
+                                <div className="flex justify-end gap-2">
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button variant="default" className="gap-2">
+                                                <Settings2 className="h-4 w-4" />
+                                                Configure Keys
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="max-w-md">
+                                            <DialogHeader>
+                                                <DialogTitle>Configure PicaOS Keys</DialogTitle>
+                                                <DialogDescription>
+                                                    Set your PicaOS environment variables. Click save when done.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <form
+                                                className="space-y-4 pt-4"
+                                                onSubmit={async (e) => {
+                                                    e.preventDefault();
+                                                    const formData = new FormData(e.currentTarget);
+                                                    const updates = [
+                                                        { key: "PICA_SECRET_KEY", value: formData.get("pica_secret_key") as string },
+                                                        { key: "PICA_WEAVIATE_CONNECTION_KEY", value: formData.get("pica_weaviate_key") as string },
+                                                        { key: "PICA_SUPABASE_CONNECTION_KEY", value: formData.get("pica_supabase_key") as string },
+                                                        { key: "PICA_MONGO_DB_ATLAS_CONNECTION_KEY", value: formData.get("pica_mongo_key") as string },
+                                                    ];
+
+                                                    let saved = 0;
+                                                    for (const { key, value } of updates) {
+                                                        if (value && value.trim() !== "") {
+                                                            await handleSavePicaKey(key, value.trim());
+                                                            saved++;
+                                                        }
+                                                    }
+
+                                                    if (saved > 0) {
+                                                        toast.success(`Saved ${saved} PicaOS keys.`);
+                                                        fetchPicaStatus();
+                                                    } else {
+                                                        toast.info("No keys provided to save.");
+                                                    }
+                                                }}
+                                            >
+                                                <div className="space-y-2">
+                                                    <Label>Pica Secret Key</Label>
+                                                    <Input name="pica_secret_key" type="password" placeholder="pica_sk_..." />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Weaviate Connection Key</Label>
+                                                    <Input name="pica_weaviate_key" type="password" placeholder="pica_conn_..." />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Supabase Connection Key</Label>
+                                                    <Input name="pica_supabase_key" type="password" placeholder="pica_conn_..." />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>MongoDB Connection Key</Label>
+                                                    <Input name="pica_mongo_key" type="password" placeholder="pica_conn_..." />
+                                                </div>
+                                                <div className="flex justify-end pt-2">
+                                                    <Button type="submit">Save Changes</Button>
+                                                </div>
+                                            </form>
+                                        </DialogContent>
+                                    </Dialog>
+
                                     <Button onClick={fetchPicaStatus} disabled={picaLoading} variant="outline" className="gap-2">
                                         <RefreshCw className={cn("h-4 w-4", picaLoading && "animate-spin")} />
                                         Refresh Status

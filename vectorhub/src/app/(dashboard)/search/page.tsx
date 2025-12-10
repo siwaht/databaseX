@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useStore } from "@/store";
 import { RAGChat, type AIAgent } from "@/components/search/RAGChat";
+import { ExecutionStep } from "@/components/search/ThinkingProcess";
 import { SearchResult } from "@/lib/db/adapters/base";
 import {
     Select,
@@ -192,7 +193,7 @@ export default function SearchPage() {
             message: string,
             agent: AIAgent | null,
             history: any[] // Using any[] for now to avoid importing Message type circular dependency, or define it here
-        ): Promise<{ response: string; context: SearchResult[] }> => {
+        ): Promise<{ response: string; context: SearchResult[]; agentUsed?: string; steps?: ExecutionStep[] }> => {
             try {
                 const response = await fetch("/api/rag", {
                     method: "POST",
@@ -228,6 +229,8 @@ export default function SearchPage() {
                 return {
                     response: data.response,
                     context: data.context || [],
+                    agentUsed: data.agentUsed,
+                    steps: data.steps || [],
                 };
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : "Unknown error";

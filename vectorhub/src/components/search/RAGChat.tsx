@@ -26,6 +26,8 @@ import {
 import { cn } from "@/lib/utils";
 import { SearchResult } from "@/lib/db/adapters/base";
 
+import { ThinkingProcess, ExecutionStep } from "./ThinkingProcess";
+
 export interface Message {
     id: string;
     role: "user" | "assistant" | "system";
@@ -33,6 +35,7 @@ export interface Message {
     timestamp: Date;
     context?: SearchResult[];
     agentUsed?: string;
+    steps?: ExecutionStep[];
     isLoading?: boolean;
 }
 
@@ -50,7 +53,7 @@ interface RAGChatProps {
         message: string,
         agent: AIAgent | null,
         history: Message[]
-    ) => Promise<{ response: string; context: SearchResult[] }>;
+    ) => Promise<{ response: string; context: SearchResult[]; agentUsed?: string; steps?: ExecutionStep[] }>;
     agents: AIAgent[];
     selectedAgent: AIAgent | null;
     onSelectAgent: (agent: AIAgent | null) => void;
@@ -165,6 +168,9 @@ function MessageBubble({ message }: { message: Message }) {
                             </div>
                         ) : (
                             <>
+                                {message.steps && message.steps.length > 0 && (
+                                    <ThinkingProcess steps={message.steps} />
+                                )}
                                 <p className="text-sm whitespace-pre-wrap">
                                     {message.content}
                                 </p>
@@ -260,7 +266,7 @@ export function RAGChat({
         setIsLoading(true);
 
         try {
-            const { response, context } = await onSendMessage(
+            const { response, context, agentUsed, steps } = await onSendMessage(
                 input.trim(),
                 selectedAgent,
                 messages // Pass existing history (excluding current message as it's passed as query, or include it? Usually history excludes current query)
@@ -274,6 +280,8 @@ export function RAGChat({
                             ...msg,
                             content: response,
                             context,
+                            agentUsed,
+                            steps,
                             isLoading: false,
                         }
                         : msg

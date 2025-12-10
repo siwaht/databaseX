@@ -109,10 +109,18 @@ async function searchMongoDB(
     }
 }
 
+interface ExecutionStep {
+    type: "tool_call" | "tool_result" | "retrieval" | "thought";
+    content: string;
+    details?: any;
+    timestamp: string;
+}
+
 interface RAGResponse {
     response: string;
     context: SearchResult[];
     agentUsed: string;
+    steps: ExecutionStep[];
 }
 
 // Generate an AI response using OpenAI based on query and context
@@ -345,6 +353,7 @@ async function callHttpAgent(
     query: string,
     context: SearchResult[],
     agentName: string,
+    steps: ExecutionStep[],
     authHeader?: string,
     history?: { role: string; content: string }[]
 ): Promise<string> {
@@ -467,6 +476,13 @@ async function callHttpAgent(
             const workflowToUse = workflows[0];
             logger.info(`Executing workflow: ${workflowToUse.name} (${workflowToUse.id})`);
 
+            steps.push({
+                type: "tool_call",
+                content: `Executing n8n Workflow: ${workflowToUse.name}`,
+                details: { workflowId: workflowToUse.id, input: query },
+                timestamp: new Date().toISOString()
+            });
+
             const executeResponse = await mcpRequest(url, "tools/call", {
                 name: "execute_workflow",
                 arguments: {
@@ -487,6 +503,13 @@ async function callHttpAgent(
 
             // Parse execution result
             const execResult = executeResponse.result;
+
+            steps.push({
+                type: "tool_result",
+                content: `Workflow executed successfully`,
+                timestamp: new Date().toISOString()
+            });
+
             if (execResult?.content) {
                 if (Array.isArray(execResult.content)) {
                     return execResult.content.map((c: any) => c.text || c.content || JSON.stringify(c)).join("\n");
@@ -556,6 +579,13 @@ Error: ${errorMsg}${helpfulHint}
             toolArgs.context = context.map(c => c.content).join("\n\n");
         }
 
+        steps.push({
+            type: "tool_call",
+            content: `Calling MCP Tool: ${toolToUse.name}`,
+            details: { arguments: toolArgs },
+            timestamp: new Date().toISOString()
+        });
+
         const toolResponse = await mcpRequest(url, "tools/call", {
             name: toolToUse.name,
             arguments: toolArgs,
@@ -567,6 +597,13 @@ Error: ${errorMsg}${helpfulHint}
         }
 
         const result = toolResponse.result;
+
+        steps.push({
+            type: "tool_result",
+            content: `Tool ${toolToUse.name} executed successfully`,
+            timestamp: new Date().toISOString()
+        });
+
         if (result?.content) {
             if (Array.isArray(result.content)) {
                 return result.content.map((c: any) => c.text || c.content || JSON.stringify(c)).join("\n");
@@ -584,6 +621,13 @@ Error: ${errorMsg}${helpfulHint}
 
     // No tools available - try simple webhook format
     logger.info("No MCP tools found, trying webhook format...");
+
+    steps.push({
+        type: "tool_call",
+        content: `Calling Webhook: ${url}`,
+        details: { query, contextCount: context.length },
+        timestamp: new Date().toISOString()
+    });
 
     const webhookResponse = await fetch(url, {
         method: "POST",
@@ -656,6 +700,7 @@ Example response format: { "response": "Your answer here" }`);
 async function handleLocalAgent(
     query: string,
     context: SearchResult[],
+    steps: ExecutionStep[],
     history?: { role: string; content: string }[]
 ): Promise<string> {
     const queryLower = query.toLowerCase();
@@ -670,6 +715,11 @@ async function handleLocalAgent(
 
             if (mathMatch) {
                 const expression = mathMatch[0];
+                steps.push({
+                    type: "tool_call",
+                    content: `Calculated: ${expression}`,
+                    timestamp: new Date().toISOString()
+                });
                 // Safe evaluation using Function constructor with strict limitations
                 // In a real production env, use a math parser library like mathjs
                 const result = new Function(`return ${expression}`)();
@@ -686,8 +736,20 @@ async function handleLocalAgent(
         const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const dateString = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+        steps.push({
+            type: "tool_call",
+            content: "Checked System Time",
+            timestamp: new Date().toISOString()
+        });
+
         return `I checked the **system clock** for you.\n\nCurrent Time: **${timeString}**\nDate: **${dateString}**`;
     }
+
+    steps.push({
+        type: "thought",
+        content: "No local tools matched, falling back to LLM",
+        timestamp: new Date().toISOString()
+    });
 
     // Default RAG response if no tools matched - use AI
     return generateAIResponse(query, context, "VectorHub Assistant", history);
@@ -767,8 +829,14 @@ export async function POST(request: Request) {
 
         // Step 1: Retrieve relevant context from vector database (if collection specified)
         let context: SearchResult[] = [];
+        const steps: ExecutionStep[] = [];
 
         if (collection) {
+            steps.push({
+                type: "thought",
+                content: `Searching collection: ${collection}`,
+                timestamp: new Date().toISOString()
+            });
             try {
                 // Use provided connection config or fallback to environment variable
                 const connString = connectionConfig?.connectionString || process.env.MONGODB_URI;
@@ -785,15 +853,37 @@ export async function POST(request: Request) {
                         connectionConfig?.vectorSearchIndexName || "vector_index",
                         connectionConfig?.embeddingField || "embedding"
                     );
+                    steps.push({
+                        type: "retrieval",
+                        content: `Retrieved ${context.length} documents`,
+                        details: context.map(d => ({ source: d.metadata?.source, score: d.score })),
+                        timestamp: new Date().toISOString()
+                    });
                     logger.info(`Retrieved ${context.length} documents from collection "${collection}"`);
                 } else {
+                    steps.push({
+                        type: "thought",
+                        content: "No MongoDB connection string available, skipping search.",
+                        timestamp: new Date().toISOString()
+                    });
                     logger.warn("No MongoDB connection string available");
                 }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : "Unknown error";
+                steps.push({
+                    type: "thought",
+                    content: `Search failed: ${errorMessage}`,
+                    timestamp: new Date().toISOString()
+                });
                 logger.warn(`Collection search failed: ${errorMessage}`);
                 // Continue without context rather than failing
             }
+        } else {
+            steps.push({
+                type: "thought",
+                content: "No collection selected, skipping retrieval.",
+                timestamp: new Date().toISOString()
+            });
         }
 
         // Filter out documents with empty content to prevent errors in downstream agents
@@ -813,13 +903,18 @@ export async function POST(request: Request) {
             const endpoint = extractHttpUrl(agent);
             const authHeader = extractAuthHeader(agent);
 
-            if (agent.endpoint === "local") {
+            if (endpoint === "local") {
                 // Handle built-in local agent
-                response = await handleLocalAgent(query, context, history);
+                response = await handleLocalAgent(query, context, steps, history);
                 agentUsed = "VectorHub Assistant";
             } else if (agent.config?.type === 'stdio') {
                 // Handle Stdio MCP Agent (Local Process)
                 try {
+                    steps.push({
+                        type: "thought",
+                        content: `Starting Stdio Agent: ${agent.config.command} ${agent.config.args?.join(" ")}`,
+                        timestamp: new Date().toISOString()
+                    });
                     const client = new OneShotMcpClient(
                         agent.config.command || "npx",
                         agent.config.args || [],
@@ -836,13 +931,19 @@ export async function POST(request: Request) {
                         response += `\n\n⚠️ *Connected to ${agentName}, but it exposes no tools.*`;
                     } else {
                         // 2. Simple selection: pick the first tool or search for "chat"/"query"
-                        // In a real agent, we'd use an LLM to pick the tool.
                         let toolToUse = tools[0];
                         const preferredNames = ["chat", "message", "ask", "query", "ai", "assistant", "agent"];
                         const preferred = tools.find(t => preferredNames.some(name => t.name.toLowerCase().includes(name)));
                         if (preferred) toolToUse = preferred;
 
                         logger.info(`Selected tool: ${toolToUse.name}`);
+
+                        steps.push({
+                            type: "tool_call",
+                            content: `Calling Stdio Tool: ${toolToUse.name}`,
+                            details: { arguments: { query } },
+                            timestamp: new Date().toISOString()
+                        });
 
                         // 3. Call the tool
                         const toolArgs: any = {
@@ -856,8 +957,6 @@ export async function POST(request: Request) {
                         if (context.length > 0) {
                             toolArgs.context = context.map(c => c.content).join("\n\n");
                         }
-
-                        // Clean up args based on schema if needed (omitted for brevity)
 
                         const result = await client.callTool(toolToUse.name, toolArgs);
 
@@ -882,6 +981,11 @@ export async function POST(request: Request) {
                 } catch (err) {
                     const errorMsg = err instanceof Error ? err.message : "Unknown error";
                     logger.error(`Stdio Agent call failed: ${errorMsg}`);
+                    steps.push({
+                        type: "tool_result",
+                        content: `Stdio Agent failed: ${errorMsg}`,
+                        timestamp: new Date().toISOString()
+                    });
                     response = await generateAIResponse(query, context, agentName, history);
                     response += `\n\n⚠️ *Failed to execute local tool ${agentName}.*\n*Error: ${errorMsg}*`;
                     agentUsed = `${agentName} (fallback)`;
@@ -890,7 +994,8 @@ export async function POST(request: Request) {
             } else if (endpoint) {
                 try {
                     logger.info(`Calling agent ${agentName} at ${endpoint} (auth: ${authHeader ? "yes" : "no"})`);
-                    response = await callHttpAgent(endpoint, query, context, agentName, authHeader, body.history);
+                    // pass steps correctly
+                    response = await callHttpAgent(endpoint, query, context, agentName, steps, authHeader, history);
                     agentUsed = agentName;
                 } catch (err) {
                     const errorMsg = err instanceof Error ? err.message : "Unknown error";
@@ -911,6 +1016,7 @@ export async function POST(request: Request) {
             response,
             context,
             agentUsed,
+            steps
         };
 
         return NextResponse.json(result);
