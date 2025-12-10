@@ -1,12 +1,16 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { MongoClient } from "mongodb";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import { User } from "@/types/user";
 
 if (!process.env.NEXTAUTH_SECRET) {
     console.warn("NEXTAUTH_SECRET is not set");
 }
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+});
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -21,17 +25,13 @@ export const authOptions: NextAuthOptions = {
                     return null;
                 }
 
-                const connectionString = process.env.MONGODB_URI;
-                if (!connectionString) {
-                    throw new Error("MONGODB_URI is not set");
-                }
-
-                const client = new MongoClient(connectionString);
-
                 try {
-                    await client.connect();
-                    const db = client.db(); // Uses default DB from URI
-                    const user = await db.collection<User>("users").findOne({ email: credentials.email });
+                    const result = await pool.query(
+                        `SELECT id, email, password_hash as "passwordHash", name, role, status, permissions FROM users WHERE email = $1`,
+                        [credentials.email]
+                    );
+
+                    const user = result.rows[0] as User | undefined;
 
                     if (!user) {
                         return null;
@@ -47,10 +47,9 @@ export const authOptions: NextAuthOptions = {
                         return null;
                     }
 
-                    // Update last login
-                    await db.collection("users").updateOne(
-                        { id: user.id },
-                        { $set: { lastLogin: new Date() } }
+                    await pool.query(
+                        `UPDATE users SET last_login = NOW() WHERE id = $1`,
+                        [user.id]
                     );
 
                     return {
@@ -60,8 +59,9 @@ export const authOptions: NextAuthOptions = {
                         role: user.role,
                         permissions: user.permissions
                     };
-                } finally {
-                    await client.close();
+                } catch (error) {
+                    console.error("Auth error:", error);
+                    throw error;
                 }
             }
         })

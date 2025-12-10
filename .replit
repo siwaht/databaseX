@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web"]
+modules = ["nodejs-20", "web", "postgresql-16"]
 [agent]
 expertMode = true
 integrations = ["javascript_openai_ai_integrations:1.0.0"]
@@ -40,8 +40,8 @@ externalPort = 3000
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bash", "-c", "cd vectorhub && npm run start"]
-build = ["bash", "-c", "cd vectorhub && npm run build"]
+run = ["bash", "-c", "cd vectorhub && npm start"]
+build = ["bash", "-c", "cd vectorhub && npm install && npm run build"]
 
 [userenv]
 
