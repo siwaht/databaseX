@@ -41,7 +41,7 @@ externalPort = 3000
 [deployment]
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "cd vectorhub && npm start"]
-build = ["bash", "-c", "cd vectorhub && npm install && npm run build"]
+build = ["bash", "-c", "cd vectorhub && npm ci && npm run build"]
 
 [userenv]
 
