@@ -1,4 +1,4 @@
-import { env } from './env';
+import { dynamicPicaConfig } from './dynamic-env';
 
 export interface WeaviateDocument {
     class: string;
@@ -22,7 +22,7 @@ export interface PicaWeaviateResponse {
  * @returns The created object response from Weaviate/Pica
  */
 export async function createWeaviateDocument(doc: WeaviateDocument): Promise<PicaWeaviateResponse> {
-    if (!env.picaSecretKey || !env.picaWeaviateConnectionKey) {
+    if (!dynamicPicaConfig.secretKey || !dynamicPicaConfig.weaviateKey) {
         console.warn('Missing Pica credentials. Ensure PICA_SECRET_KEY and PICA_WEAVIATE_CONNECTION_KEY are set.');
     }
 
@@ -30,8 +30,8 @@ export async function createWeaviateDocument(doc: WeaviateDocument): Promise<Pic
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'x-pica-secret': env.picaSecretKey,
-            'x-pica-connection-key': env.picaWeaviateConnectionKey,
+            'x-pica-secret': dynamicPicaConfig.secretKey,
+            'x-pica-connection-key': dynamicPicaConfig.weaviateKey,
             'x-pica-action-id': 'conn_mod_def::GC_6t2UcL3M::lk1uyIPORfaW0ZbperpNpA'
         },
         body: JSON.stringify(doc)
@@ -110,7 +110,7 @@ export interface MongoOnlineArchiveResponse {
  * Lists SQL snippets from Supabase via Pica Edge Function.
  */
 export async function listSupabaseSnippets(params: ListSupabaseSnippetsParams = {}): Promise<SupabaseSnippetsResponse> {
-    if (!env.picaSecretKey || !env.picaSupabaseConnectionKey) {
+    if (!dynamicPicaConfig.secretKey || !dynamicPicaConfig.supabaseKey) {
         console.warn('Missing Pica Supabase credentials.');
     }
 
@@ -125,8 +125,8 @@ export async function listSupabaseSnippets(params: ListSupabaseSnippetsParams = 
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',
-            'x-pica-secret': env.picaSecretKey,
-            'x-pica-connection-key': env.picaSupabaseConnectionKey,
+            'x-pica-secret': dynamicPicaConfig.secretKey,
+            'x-pica-connection-key': dynamicPicaConfig.supabaseKey,
             'x-pica-action-id': 'conn_mod_def::GC40SSqjgKI::vys6h_oeS6OSLMbQ4kszcg'
         }
     });
@@ -149,7 +149,7 @@ export async function createMongoOnlineArchive(
     clusterName: string,
     config: MongoOnlineArchiveConfig
 ): Promise<MongoOnlineArchiveResponse> {
-    if (!env.picaSecretKey || !env.picaMongoDbAtlasConnectionKey) {
+    if (!dynamicPicaConfig.secretKey || !dynamicPicaConfig.mongoKey) {
         console.warn('Missing Pica MongoDB credentials.');
     }
 
@@ -159,8 +159,8 @@ export async function createMongoOnlineArchive(
         method: 'POST',
         headers: {
             'Content-Type': 'application/vnd.atlas.2023-01-01+json',
-            'x-pica-secret': env.picaSecretKey,
-            'x-pica-connection-key': env.picaMongoDbAtlasConnectionKey,
+            'x-pica-secret': dynamicPicaConfig.secretKey,
+            'x-pica-connection-key': dynamicPicaConfig.mongoKey,
             'x-pica-action-id': 'conn_mod_def::GEubJKD0RjM::C1PZX0IXQtuRnNVdCm5YBA'
         },
         body: JSON.stringify(config)

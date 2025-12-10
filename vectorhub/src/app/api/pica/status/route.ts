@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { env } from '@/lib/env';
+import { dynamicPicaConfig } from '@/lib/dynamic-env';
 
 export async function GET() {
     return NextResponse.json({
-        weaviate: !!env.picaSecretKey && !!env.picaWeaviateConnectionKey,
-        supabase: !!env.picaSecretKey && !!env.picaSupabaseConnectionKey,
-        mongodb: !!env.picaSecretKey && !!env.picaMongoDbAtlasConnectionKey,
+        weaviate: !!dynamicPicaConfig.secretKey && !!dynamicPicaConfig.weaviateKey,
+        supabase: !!dynamicPicaConfig.secretKey && !!dynamicPicaConfig.supabaseKey,
+        mongodb: !!dynamicPicaConfig.secretKey && !!dynamicPicaConfig.mongoKey,
     });
 }
