@@ -96,7 +96,7 @@ export default function DashboardPage() {
         const totalMcpConnections = mcpConnections?.length || 0;
         const totalWebhooks = webhookConnections?.length || 0;
 
-        // Estimate storage (mock calculation based on documents)
+        // Estimate storage usage (heuristic based on average document/vector sizes)
         const estimatedStorageMB = totalDocuments * 0.5 + totalVectors * 0.001;
         const storageUsedGB = (estimatedStorageMB / 1024).toFixed(2);
 
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                 id: `coll-${coll.name}`,
                 action: "Collection active",
                 target: `${coll.name} (${coll.documentCount.toLocaleString()} vectors)`,
-                time: new Date(Date.now() - Math.random() * 86400000), // Random time within last 24h
+                time: new Date(), // Active now
                 icon: Layers,
                 type: "collection",
             });

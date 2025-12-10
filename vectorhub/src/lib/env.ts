@@ -16,6 +16,10 @@ export const env = {
     // Runtime checks
     isProduction: process.env.NODE_ENV === 'production',
     isDevelopment: process.env.NODE_ENV === 'development',
+
+    // Pica / Weaviate
+    picaSecretKey: process.env.PICA_SECRET_KEY || '',
+    picaWeaviateConnectionKey: process.env.PICA_WEAVIATE_CONNECTION_KEY || '',
 } as const;
 
 // Type-safe environment access
