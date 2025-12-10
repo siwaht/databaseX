@@ -44,3 +44,132 @@ export async function createWeaviateDocument(doc: WeaviateDocument): Promise<Pic
 
     return response.json();
 }
+
+// --- Supabase Interfaces ---
+
+export interface SupabaseSnippet {
+    id: string;
+    inserted_at: string;
+    updated_at: string;
+    type: 'sql';
+    visibility: 'user' | 'project';
+    name: string;
+    description?: string;
+    project: {
+        id: number;
+        name: string;
+    };
+    owner: {
+        id: number;
+        username: string;
+    };
+    updated_by: {
+        id: number;
+        username: string;
+    };
+}
+
+export interface ListSupabaseSnippetsParams {
+    cursor?: string;
+    limit?: string;
+    sort_by?: 'name' | 'inserted_at';
+    sort_order?: 'asc' | 'desc';
+    project_ref?: string;
+}
+
+export interface SupabaseSnippetsResponse {
+    data: SupabaseSnippet[];
+    cursor?: string;
+}
+
+// --- MongoDB Interfaces ---
+
+export interface MongoOnlineArchiveConfig {
+    collName: string;
+    dbName: string;
+    criteria: {
+        type: 'DATE' | 'CUSTOM';
+        // Add other criteria fields if needed
+    };
+    // Add other optional fields from schema as needed
+    [key: string]: any;
+}
+
+export interface MongoOnlineArchiveResponse {
+    _id: string;
+    clusterName: string;
+    collName: string;
+    dbName: string;
+    state: string;
+    [key: string]: any;
+}
+
+// --- Supabase Functions ---
+
+/**
+ * Lists SQL snippets from Supabase via Pica Edge Function.
+ */
+export async function listSupabaseSnippets(params: ListSupabaseSnippetsParams = {}): Promise<SupabaseSnippetsResponse> {
+    if (!env.picaSecretKey || !env.picaSupabaseConnectionKey) {
+        console.warn('Missing Pica Supabase credentials.');
+    }
+
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value);
+    });
+
+    const url = `https://api.picaos.com/v1/passthrough/v1/snippets?${queryParams.toString()}`;
+
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-pica-secret': env.picaSecretKey,
+            'x-pica-connection-key': env.picaSupabaseConnectionKey,
+            'x-pica-action-id': 'conn_mod_def::GC40SSqjgKI::vys6h_oeS6OSLMbQ4kszcg'
+        }
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to list Supabase snippets via Pica: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    return response.json();
+}
+
+// --- MongoDB Functions ---
+
+/**
+ * Creates an Online Archive in MongoDB Atlas via Pica Edge Function.
+ */
+export async function createMongoOnlineArchive(
+    groupId: string,
+    clusterName: string,
+    config: MongoOnlineArchiveConfig
+): Promise<MongoOnlineArchiveResponse> {
+    if (!env.picaSecretKey || !env.picaMongoDbAtlasConnectionKey) {
+        console.warn('Missing Pica MongoDB credentials.');
+    }
+
+    const url = `https://api.picaos.com/v1/passthrough/groups/${groupId}/clusters/${clusterName}/onlineArchives`;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/vnd.atlas.2023-01-01+json',
+            'x-pica-secret': env.picaSecretKey,
+            'x-pica-connection-key': env.picaMongoDbAtlasConnectionKey,
+            'x-pica-action-id': 'conn_mod_def::GEubJKD0RjM::C1PZX0IXQtuRnNVdCm5YBA'
+        },
+        body: JSON.stringify(config)
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to create MongoDB Online Archive via Pica: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    return response.json();
+}

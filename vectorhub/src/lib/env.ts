@@ -20,6 +20,8 @@ export const env = {
     // Pica / Weaviate
     picaSecretKey: process.env.PICA_SECRET_KEY || '',
     picaWeaviateConnectionKey: process.env.PICA_WEAVIATE_CONNECTION_KEY || '',
+    picaSupabaseConnectionKey: process.env.PICA_SUPABASE_CONNECTION_KEY || '',
+    picaMongoDbAtlasConnectionKey: process.env.PICA_MONGO_DB_ATLAS_CONNECTION_KEY || '',
 } as const;
 
 // Type-safe environment access
