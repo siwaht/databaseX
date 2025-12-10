@@ -51,7 +51,7 @@ export async function listDocumentsApi(
         limit: limit.toString(),
         skip: skip.toString(),
     });
-    
+
     const res = await fetch(`${BASE_URL}?${params}`, {
         method: "GET",
         headers: getHeaders(config),
@@ -62,12 +62,18 @@ export async function listDocumentsApi(
 export async function addDocumentsApi(
     collection: string,
     documents: VectorDocument[],
-    config?: ConnectionConfig
+    config?: ConnectionConfig,
+    chunkingOptions?: { chunkSize?: number; chunkOverlap?: number }
 ): Promise<string[]> {
     const res = await fetch(BASE_URL, {
         method: "POST",
         headers: getHeaders(config),
-        body: JSON.stringify({ collection, documents }),
+        body: JSON.stringify({
+            collection,
+            documents,
+            chunkSize: chunkingOptions?.chunkSize,
+            chunkOverlap: chunkingOptions?.chunkOverlap
+        }),
     });
     const result = await handleResponse<AddDocumentsResult>(res);
     return result.ids;
