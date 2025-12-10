@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getUsersCollection, createUser } from "@/lib/users";
+import { createUser, getAllUsers } from "@/lib/users";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
     try {
-        const collection = await getUsersCollection();
-        const count = await collection.countDocuments();
+        const users = await getAllUsers();
 
-        if (count > 0) {
+        if (users.length > 0) {
             return NextResponse.json({ message: "Users already exist. Setup disabled." }, { status: 400 });
         }
 
