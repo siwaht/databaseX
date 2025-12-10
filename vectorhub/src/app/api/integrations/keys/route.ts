@@ -41,7 +41,7 @@ export async function GET() {
     try {
         const env = readEnvFile();
         const keys = Object.entries(env)
-            .filter(([key]) => KNOWN_KEYS[key] || key.endsWith("_API_KEY"))
+            .filter(([key]) => KNOWN_KEYS[key] || key.endsWith("_API_KEY") || key.endsWith("_KEY") || key.includes("KEY"))
             .map(([key, value]) => {
                 const known = KNOWN_KEYS[key];
                 return {
