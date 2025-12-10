@@ -4,6 +4,7 @@ import type { SearchResult } from "@/lib/db/adapters/base";
 import OpenAI from "openai";
 import { MongoClient } from "mongodb";
 import { generateEmbedding } from "@/lib/embeddings";
+import { OneShotMcpClient } from "@/lib/mcp/stdio";
 
 // Lazy-initialize OpenAI client to avoid build-time errors
 let openaiClient: OpenAI | null = null;
@@ -43,6 +44,7 @@ interface RAGRequest {
             baseUrl?: string;
             webhookUrl?: string;
             authToken?: string;
+            env?: Record<string, string>;
         };
     };
 }
@@ -815,6 +817,76 @@ export async function POST(request: Request) {
                 // Handle built-in local agent
                 response = await handleLocalAgent(query, context, history);
                 agentUsed = "VectorHub Assistant";
+            } else if (agent.config?.type === 'stdio') {
+                // Handle Stdio MCP Agent (Local Process)
+                try {
+                    const client = new OneShotMcpClient(
+                        agent.config.command || "npx",
+                        agent.config.args || [],
+                        agent.config.env || {}
+                    );
+
+                    logger.info(`Calling Stdio MCP agent: ${agentName}`);
+
+                    // 1. List tools
+                    const tools = await client.listTools();
+
+                    if (tools.length === 0) {
+                        response = await generateAIResponse(query, context, agentName, history);
+                        response += `\n\n⚠️ *Connected to ${agentName}, but it exposes no tools.*`;
+                    } else {
+                        // 2. Simple selection: pick the first tool or search for "chat"/"query"
+                        // In a real agent, we'd use an LLM to pick the tool.
+                        let toolToUse = tools[0];
+                        const preferredNames = ["chat", "message", "ask", "query", "ai", "assistant", "agent"];
+                        const preferred = tools.find(t => preferredNames.some(name => t.name.toLowerCase().includes(name)));
+                        if (preferred) toolToUse = preferred;
+
+                        logger.info(`Selected tool: ${toolToUse.name}`);
+
+                        // 3. Call the tool
+                        const toolArgs: any = {
+                            message: query,
+                            query: query,
+                            input: query, // Common arg names
+                            prompt: query,
+                            history: history
+                        };
+
+                        if (context.length > 0) {
+                            toolArgs.context = context.map(c => c.content).join("\n\n");
+                        }
+
+                        // Clean up args based on schema if needed (omitted for brevity)
+
+                        const result = await client.callTool(toolToUse.name, toolArgs);
+
+                        // Parse result content
+                        let content = "";
+                        if (result?.content) {
+                            if (Array.isArray(result.content)) {
+                                content = result.content.map((c: any) => c.text || c.content || JSON.stringify(c)).join("\n");
+                            } else {
+                                content = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
+                            }
+                        } else {
+                            content = JSON.stringify(result, null, 2);
+                        }
+
+                        response = content;
+                    }
+
+                    client.kill();
+                    agentUsed = agentName;
+
+                } catch (err) {
+                    const errorMsg = err instanceof Error ? err.message : "Unknown error";
+                    logger.error(`Stdio Agent call failed: ${errorMsg}`);
+                    response = await generateAIResponse(query, context, agentName, history);
+                    response += `\n\n⚠️ *Failed to execute local tool ${agentName}.*\n*Error: ${errorMsg}*`;
+                    agentUsed = `${agentName} (fallback)`;
+                }
+
             } else if (endpoint) {
                 try {
                     logger.info(`Calling agent ${agentName} at ${endpoint} (auth: ${authHeader ? "yes" : "no"})`);
