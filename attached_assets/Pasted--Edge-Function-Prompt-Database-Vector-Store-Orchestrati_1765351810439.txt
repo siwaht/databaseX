@@ -1,0 +1,200 @@
+# Edge Function Prompt: Database & Vector Store Orchestration for Supabase and MongoDB Atlas
+
+---
+## SUPABASE
+
+### Example: List SQL Snippets (Read Example for Files/SQL Scripts)
+
+**API Endpoint:**
+```
+https://api.picaos.com/v1/passthrough/v1/snippets
+```
+**HTTP Method:**
+```
+GET
+```
+**Required Headers:**
+- `x-pica-secret: <PICA_SECRET_KEY>` (set in environment variables)
+- `x-pica-connection-key: <PICA_SUPABASE_CONNECTION_KEY>` (set in environment variables)
+- `x-pica-action-id: conn_mod_def::GC40SSqjgKI::vys6h_oeS6OSLMbQ4kszcg`
+- `Content-Type: application/json`
+
+**Query Parameters (Optional):**
+- `cursor: string`
+- `limit: string`
+- `sort_by: name | inserted_at`
+- `sort_order: asc | desc`
+- `project_ref: string`
+
+
+### Input JSON Schema
+```json
+{
+  "cursor": "string (optional)",
+  "limit": "string (optional)",
+  "sort_by": "name | inserted_at (optional)",
+  "sort_order": "asc | desc (optional)",
+  "project_ref": "string (optional)"
+}
+```
+
+### Output JSON Schema
+```json
+{
+  "data": [
+    {
+      "id": "string",
+      "inserted_at": "string",
+      "updated_at": "string",
+      "type": "sql",
+      "visibility": "user",
+      "name": "string",
+      "description": "string",
+      "project": {
+        "id": "number",
+        "name": "string"
+      },
+      "owner": {
+        "id": "number",
+        "username": "string"
+      },
+      "updated_by": {
+        "id": "number",
+        "username": "string"
+      }
+    }
+  ],
+  "cursor": "string"
+}
+```
+
+---
+## MONGODB ATLAS
+
+### Example: Create One Online Archive (Example for File/Document Collection Management)
+
+**API Endpoint:**
+```
+https://api.picaos.com/v1/passthrough/groups/{{groupId}}/clusters/{{clusterName}}/onlineArchives
+```
+**HTTP Method:**
+```
+POST
+```
+**Required Headers:**
+- `x-pica-secret: <PICA_SECRET_KEY>` (set in environment variables)
+- `x-pica-connection-key: <PICA_MONGO_DB_ATLAS_ADMINISTRATION_CONNECTION_KEY>` (set in environment variables)
+- `x-pica-action-id: conn_mod_def::GEubJKD0RjM::C1PZX0IXQtuRnNVdCm5YBA`
+- `Content-Type: application/vnd.atlas.2023-01-01+json`
+
+**Path Parameters:**
+- `groupId` (24-hexadecimal Project/Group ID)
+- `clusterName` (String)
+
+**Request Body:**
+```json
+{
+  "collName": "string (required, collection name)",
+  "criteria": { "type": "DATE | CUSTOM" },
+  "dbName": "string (required, database name)"
+  // ...other optional fields as in schema
+}
+```
+
+### Input JSON Schema
+```json
+{
+  "_id": "string (optional)",
+  "clusterName": "string (optional)",
+  "collName": "string (required, collection name)",
+  "collectionType": "TIMESERIES | STANDARD (optional)",
+  "criteria": { "type": "DATE | CUSTOM" },
+  "dataExpirationRule": { "expireAfterDays": "integer" },
+  "dataProcessRegion": { "cloudProvider": "AWS | AZURE | GCP" },
+  "dataSetName": "string (optional)",
+  "dbName": "string (required, database name)",
+  "groupId": "string (optional)",
+  "partitionFields": [
+    {
+      "fieldName": "string",
+      "fieldType": "date | int | long | objectId | string | uuid",
+      "order": "integer"
+    }
+  ],
+  "paused": "boolean",
+  "schedule": "object",
+  "state": "PENDING | ACTIVE | PAUSING | PAUSED | DELETED | ORPHANED"
+}
+```
+
+### Output JSON Schema
+```json
+{
+  "_id": "string",
+  "clusterName": "string",
+  "collName": "string",
+  "collectionType": "TIMESERIES | STANDARD",
+  "criteria": {
+    "type": "DATE | CUSTOM"
+  },
+  "dataExpirationRule": {
+    "expireAfterDays": "integer"
+  },
+  "dataProcessRegion": {
+    "cloudProvider": "AWS | AZURE | GCP"
+  },
+  "dataSetName": "string",
+  "dbName": "string",
+  "groupId": "string",
+  "partitionFields": [
+    {
+      "fieldName": "string",
+      "fieldType": "date | int | long | objectId | string | uuid",
+      "order": "integer"
+    }
+  ],
+  "paused": "boolean",
+  "schedule": "object",
+  "state": "PENDING | ACTIVE | PAUSING | PAUSED | DELETED | ORPHANED"
+}
+```
+
+---
+## TypeScript Example: Calling via Edge Function
+
+```typescript
+import fetch from 'node-fetch';
+
+// Supabase Example: List SQL Snippets (read)
+await fetch('https://api.picaos.com/v1/passthrough/v1/snippets?limit=10', {
+  method: 'GET',
+  headers: {
+    'x-pica-secret': process.env.PICA_SECRET_KEY!,
+    'x-pica-connection-key': process.env.PICA_SUPABASE_CONNECTION_KEY!,
+    'x-pica-action-id': 'conn_mod_def::GC40SSqjgKI::vys6h_oeS6OSLMbQ4kszcg',
+    'Content-Type': 'application/json',
+  },
+});
+
+// MongoDB Atlas Example: Create Online Archive (collection)
+await fetch('https://api.picaos.com/v1/passthrough/groups/<groupId>/clusters/<clusterName>/onlineArchives', {
+  method: 'POST',
+  headers: {
+    'x-pica-secret': process.env.PICA_SECRET_KEY!,
+    'x-pica-connection-key': process.env.PICA_MONGO_DB_ATLAS_ADMINISTRATION_CONNECTION_KEY!,
+    'x-pica-action-id': 'conn_mod_def::GEubJKD0RjM::C1PZX0IXQtuRnNVdCm5YBA',
+    'Content-Type': 'application/vnd.atlas.2023-01-01+json',
+  },
+  body: JSON.stringify({
+    collName: 'files_collection',
+    dbName: 'mydatabase',
+    criteria: { type: 'DATE' },
+  }),
+});
+```
+
+---
+
+**Reminder:** Ensure you have set `PICA_SECRET_KEY` and `PICA_SUPABASE_CONNECTION_KEY`, `PICA_MONGO_DB_ATLAS_ADMINISTRATION_CONNECTION_KEY` in your environment variables as appropriate for your connections.
+
+**You can adapt these templates for create/read/update/delete operations on Supabase and MongoDB Atlas file/document collections as described above.**
