@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { motion } from "framer-motion";
+
 import { toast } from "sonner";
 import { useStore } from "@/store";
 import { UploadZone } from "@/components/documents/UploadZone";
@@ -28,18 +28,7 @@ import { addDocumentsApi } from "@/lib/api/documents";
 import { listCollectionsApi } from "@/lib/api/collections";
 import { splitText } from "@/lib/chunking";
 
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: { staggerChildren: 0.1 },
-    },
-};
 
-const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 },
-};
 
 export default function UploadPage() {
     const connections = useStore((state) => state.connections);
@@ -430,20 +419,17 @@ export default function UploadPage() {
     const hasTargetsSelected = selectedConnection && selectedCollection;
 
     return (
-        <motion.div
+        <div
             className="space-y-6 max-w-4xl mx-auto"
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
         >
-            <motion.div variants={itemVariants}>
+            <div className="space-y-6">
                 <h2 className="text-3xl font-bold tracking-tight">Upload Data</h2>
                 <p className="text-muted-foreground">
                     Import files or text into your vector database.
                 </p>
-            </motion.div>
+            </div>
 
-            <motion.div variants={itemVariants}>
+            <div className="space-y-6">
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-lg">Target Destination</CardTitle>
@@ -510,10 +496,10 @@ export default function UploadPage() {
                         )}
                     </CardContent>
                 </Card>
-            </motion.div>
+            </div>
 
             {hasSyncConnections && (
-                <motion.div variants={itemVariants}>
+                <div className="space-y-6">
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
@@ -605,10 +591,10 @@ export default function UploadPage() {
                             </div>
                         </CardContent>
                     </Card>
-                </motion.div>
+                </div>
             )}
 
-            <motion.div variants={itemVariants}>
+            <div className="space-y-6">
                 <Collapsible
                     open={isAdvancedOpen}
                     onOpenChange={setIsAdvancedOpen}
@@ -673,9 +659,9 @@ export default function UploadPage() {
                         </Card>
                     </CollapsibleContent>
                 </Collapsible>
-            </motion.div>
+            </div>
 
-            <motion.div variants={itemVariants}>
+            <div className="space-y-6">
                 <Tabs defaultValue="text" className="w-full">
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="files" className="flex items-center gap-2">
@@ -722,6 +708,6 @@ export default function UploadPage() {
                         </Card>
                     </TabsContent>
                 </Tabs>
-            </motion.div>
+            </div>
             );
 }
