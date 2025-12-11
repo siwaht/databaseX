@@ -418,7 +418,8 @@ export default function UploadPage() {
 
     const hasTargetsSelected = selectedConnection && selectedCollection;
 
-    return <div className="space-y-6 max-w-4xl mx-auto">
+    return (
+        <div className="space-y-6 max-w-4xl mx-auto">
         <div className="space-y-6">
             <h2 className="text-3xl font-bold tracking-tight">Upload Data</h2>
             <p className="text-muted-foreground">
@@ -706,5 +707,6 @@ export default function UploadPage() {
                 </TabsContent>
             </Tabs>
         </div>
-        );
+    </div>
+    );
 }
