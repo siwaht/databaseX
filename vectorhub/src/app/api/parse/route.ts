@@ -44,9 +44,34 @@ export async function POST(request: Request) {
             if (result.messages && result.messages.length > 0) {
                 console.warn("Mammoth messages:", result.messages);
             }
+        } else if (
+            file.type === "text/plain" ||
+            file.type === "text/markdown" ||
+            file.type === "text/csv" ||
+            file.name.endsWith(".txt") ||
+            file.name.endsWith(".md") ||
+            file.name.endsWith(".csv") ||
+            file.name.endsWith(".js") ||
+            file.name.endsWith(".ts") ||
+            file.name.endsWith(".tsx") ||
+            file.name.endsWith(".py") ||
+            file.name.endsWith(".json")
+        ) {
+            // Handle as plain text
+            text = buffer.toString("utf-8");
+
+            // Basic JSON check to pretty print or validate if needed
+            if (file.type === "application/json" || file.name.endsWith(".json")) {
+                try {
+                    const jsonObj = JSON.parse(text);
+                    text = JSON.stringify(jsonObj, null, 2);
+                } catch (e) {
+                    console.warn("Failed to format JSON:", e);
+                }
+            }
         } else {
             return NextResponse.json(
-                { error: "Invalid file type. Only PDF and DOCX are supported." },
+                { error: `Invalid file type: ${file.type}. Only PDF, DOCX, TXT, MD, CSV, JSON and Code files are supported.` },
                 { status: 400 }
             );
         }

@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+import { getDropzoneAccept } from "@/lib/fileUtils";
+
 interface UploadZoneProps {
     onUpload: (files: File[]) => Promise<void>;
     disabled?: boolean;
@@ -18,32 +20,13 @@ export function UploadZone({ onUpload, disabled }: UploadZoneProps) {
     const [isUploading, setIsUploading] = useState(false);
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
-        // Filter for supported files
-        const supportedFiles = acceptedFiles.filter(file =>
-            file.type === "application/pdf" ||
-            file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-            file.name.endsWith(".pdf") ||
-            file.name.endsWith(".docx")
-        );
-
-        if (supportedFiles.length === 0) {
-            toast.error("No supported files found. Please upload PDF or DOCX files.");
-            return;
-        }
-
-        if (supportedFiles.length < acceptedFiles.length) {
-            toast.warning(`Skipped ${acceptedFiles.length - supportedFiles.length} unsupported files.`);
-        }
-
-        setFiles(prev => [...prev, ...supportedFiles]);
+        // All files passed to onDrop from useDropzone are already filtered by 'accept'
+        setFiles(prev => [...prev, ...acceptedFiles]);
     }, []);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
-        accept: {
-            "application/pdf": [".pdf"],
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-        },
+        accept: getDropzoneAccept(),
         disabled: disabled || isUploading,
         maxSize: 10 * 1024 * 1024, // 10MB
     });
@@ -103,7 +86,7 @@ export function UploadZone({ onUpload, disabled }: UploadZoneProps) {
                     {isDragActive ? "Drop files here" : "Drag & drop files here"}
                 </h3>
                 <p className="mb-4 text-sm text-muted-foreground text-center">
-                    Supported formats: PDF, DOCX
+                    Supported formats: PDF, DOCX, TXT, MD, CSV, JSON, Code
                     <br />
                     <span className="text-xs">Max file size: 10 MB</span>
                 </p>

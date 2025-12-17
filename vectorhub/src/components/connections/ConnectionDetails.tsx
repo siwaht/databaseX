@@ -84,10 +84,10 @@ async function fetchConnectionDetails(connection: ConnectionConfig): Promise<{
     serverInfo: Record<string, string>;
 }> {
     let fetchedCollections: CollectionInfo[] = [];
-    
+
     // Connection types that should fetch from API
     const apiTypes = ["mongodb_atlas", "supabase", "pinecone", "weaviate", "qdrant", "chromadb", "milvus", "redis", "upstash", "neo4j", "elasticsearch", "pgvector", "mcp"];
-    
+
     if (apiTypes.includes(connection.type)) {
         try {
             const apiCollections = await listCollectionsApi(connection);
@@ -381,6 +381,7 @@ export function ConnectionDetails({
                                                 <h4 className="text-sm font-medium flex items-center gap-2">
                                                     <Activity className="h-4 w-4 text-muted-foreground" />
                                                     Recent Activity
+                                                    <Badge variant="outline" className="text-[10px] py-0 h-4 bg-muted/50 text-muted-foreground border-none">Mock</Badge>
                                                 </h4>
                                                 <div className="space-y-2">
                                                     {[
@@ -547,6 +548,7 @@ export function ConnectionDetails({
                                                 <h4 className="text-sm font-medium flex items-center gap-2">
                                                     <Activity className="h-4 w-4 text-muted-foreground" />
                                                     Health Status
+                                                    <Badge variant="outline" className="text-[10px] py-0 h-4 bg-muted/50 text-muted-foreground border-none">Mock</Badge>
                                                 </h4>
                                                 <div className="space-y-2">
                                                     {[
