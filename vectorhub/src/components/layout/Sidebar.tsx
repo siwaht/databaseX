@@ -16,6 +16,7 @@ import {
     User,
     Users,
     Key,
+    Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,7 @@ const navItems = [
     { href: "/documents", icon: Files, label: "Documents" },
     { href: "/upload", icon: Upload, label: "Upload" },
     { href: "/search", icon: Search, label: "Search" },
+    { href: "/bookings", icon: Calendar, label: "Bookings" },
 ];
 
 const bottomNavItems = [
