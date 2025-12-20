@@ -26,7 +26,7 @@ interface EventEditorDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     event?: EventType;
-    onSave: (event: EventType) => void;
+    onSave: (event: Omit<EventType, "id"> & { id?: string }) => void;
 }
 
 const COLORS = [
@@ -83,8 +83,8 @@ export function EventEditorDialog({
     const handleSave = () => {
         if (!title || !slug) return;
 
-        const newEvent: EventType = {
-            id: event?.id || crypto.randomUUID(),
+        const newEvent = {
+            id: event?.id,
             name: title,
             slug: slug.startsWith('/') ? slug : `/${slug}`,
             duration: parseInt(duration),

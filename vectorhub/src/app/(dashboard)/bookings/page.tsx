@@ -123,7 +123,7 @@ export default function BookingsPage() {
         setIsEditorOpen(true);
     };
 
-    const handleSaveEvent = async (savedEvent: EventType) => {
+    const handleSaveEvent = async (savedEvent: Omit<EventType, "id"> & { id?: string }) => {
         try {
             const res = await fetch('/api/bookings/event-types', {
                 method: 'POST',
