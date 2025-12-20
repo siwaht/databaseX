@@ -44,6 +44,7 @@ export default function BookingsPage() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isIntegrationOpen, setIsIntegrationOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
+    const [selectedIntegration, setSelectedIntegration] = useState<any | undefined>(undefined);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Import/Export Handlers
@@ -160,11 +161,27 @@ export default function BookingsPage() {
             if (!res.ok) throw new Error("Failed to save");
             const saved = await res.json();
 
-            setIntegrations(prev => [...prev, saved]);
+            setIntegrations(prev => {
+                const exists = prev.find(i => i.id === saved.id);
+                if (exists) {
+                    return prev.map(i => i.id === saved.id ? saved : i);
+                }
+                return [...prev, saved];
+            });
             setIsIntegrationOpen(false); // Close dialog here since page handles save
         } catch (error) {
             toast.error("Failed to save integration");
         }
+    };
+
+    const handleConfigure = (integration: any) => {
+        setSelectedIntegration(integration);
+        setIsIntegrationOpen(true);
+    };
+
+    const handleNewIntegration = () => {
+        setSelectedIntegration(undefined);
+        setIsIntegrationOpen(true);
     };
 
     const handleSettings = () => {
@@ -369,7 +386,7 @@ export default function BookingsPage() {
                                 Connect your booking flow to external tools.
                             </p>
                         </div>
-                        <Button onClick={() => setIsIntegrationOpen(true)}>
+                        <Button onClick={handleNewIntegration}>
                             <Plus className="mr-2 h-4 w-4" />
                             Add Connection
                         </Button>
@@ -412,7 +429,7 @@ export default function BookingsPage() {
                                             <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-200">
                                                 Active
                                             </Badge>
-                                            <Button variant="ghost" size="sm">Configure</Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleConfigure(integration)}>Configure</Button>
                                         </div>
                                     </div>
                                 </Card>
@@ -437,6 +454,7 @@ export default function BookingsPage() {
             <BookingIntegrationDialog
                 open={isIntegrationOpen}
                 onOpenChange={setIsIntegrationOpen}
+                integration={selectedIntegration}
                 onSave={handleSaveIntegration}
             />
         </div>

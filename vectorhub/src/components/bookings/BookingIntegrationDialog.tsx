@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     Dialog,
     DialogContent,
@@ -26,12 +26,14 @@ import { Webhook, RadioTower } from "lucide-react";
 interface BookingIntegrationDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    integration?: any; // Add integration prop
     onSave: (integration: any) => void;
 }
 
 export function BookingIntegrationDialog({
     open,
     onOpenChange,
+    integration,
     onSave,
 }: BookingIntegrationDialogProps) {
     const [type, setType] = useState<"webhook" | "mcp">("webhook");
@@ -40,11 +42,28 @@ export function BookingIntegrationDialog({
     const [secret, setSecret] = useState("");
     const [events, setEvents] = useState<string[]>([]);
 
+    // Populate form on open/change
+    useEffect(() => {
+        if (integration) {
+            setType(integration.type);
+            setName(integration.name);
+            setUrl(integration.config.url);
+            setSecret(integration.config.secret || "");
+            setEvents(integration.config.events || []);
+        } else {
+            setType("webhook");
+            setName("");
+            setUrl("");
+            setSecret("");
+            setEvents([]);
+        }
+    }, [integration, open]);
+
     const handleSave = () => {
         if (!name || !url) return;
 
-        const integration = {
-            id: crypto.randomUUID(),
+        const newIntegration = {
+            id: integration?.id || crypto.randomUUID(),
             type,
             name,
             config: {
@@ -55,15 +74,17 @@ export function BookingIntegrationDialog({
             status: 'active'
         };
 
-        onSave(integration);
+        onSave(newIntegration);
         onOpenChange(false);
-        toast.success(`Connected to ${name}`);
+        toast.success(integration ? `Updated ${name}` : `Connected to ${name}`);
 
-        // Reset form
-        setName("");
-        setUrl("");
-        setSecret("");
-        setEvents([]);
+        if (!integration) {
+            // Reset form only if creating new
+            setName("");
+            setUrl("");
+            setSecret("");
+            setEvents([]);
+        }
     };
 
     const toggleEvent = (event: string) => {
@@ -78,9 +99,11 @@ export function BookingIntegrationDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle>Add Integration</DialogTitle>
+                    <DialogTitle>{integration ? "Edit Integration" : "Add Integration"}</DialogTitle>
                     <DialogDescription>
-                        Connect your bookings to external tools via Webhooks or MCP.
+                        {integration
+                            ? "Modify your existing integration settings."
+                            : "Connect your bookings to external tools via Webhooks or MCP."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -88,8 +111,8 @@ export function BookingIntegrationDialog({
                     <div className="grid grid-cols-2 gap-4">
                         <div
                             className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 cursor-pointer transition-all ${type === 'webhook'
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-muted hover:border-primary/50'
+                                ? 'border-primary bg-primary/5'
+                                : 'border-muted hover:border-primary/50'
                                 }`}
                             onClick={() => setType('webhook')}
                         >
@@ -98,8 +121,8 @@ export function BookingIntegrationDialog({
                         </div>
                         <div
                             className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 cursor-pointer transition-all ${type === 'mcp'
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-muted hover:border-primary/50'
+                                ? 'border-primary bg-primary/5'
+                                : 'border-muted hover:border-primary/50'
                                 }`}
                             onClick={() => setType('mcp')}
                         >
@@ -164,7 +187,7 @@ export function BookingIntegrationDialog({
                         Cancel
                     </Button>
                     <Button onClick={handleSave} disabled={!name || !url}>
-                        Connect
+                        {integration ? "Save Changes" : "Connect"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
