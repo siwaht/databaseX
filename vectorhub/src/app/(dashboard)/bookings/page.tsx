@@ -20,9 +20,48 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 export default function BookingsPage() {
     const [activeTab, setActiveTab] = useState("bookings");
+
+    const handleCopyLink = (slug: string) => {
+        const fullLink = `${window.location.origin}/book${slug}`;
+        navigator.clipboard.writeText(fullLink);
+        toast.success("Link copied to clipboard!", {
+            description: fullLink
+        });
+    };
+
+    const handleEdit = (title: string) => {
+        toast.info(`Editing ${title}`, {
+            description: "The edit dialog is currently under development."
+        });
+    };
+
+    const handleNewEvent = () => {
+        toast.info("New Event Type", {
+            description: "The event creation wizard is currently under development."
+        });
+    };
+
+    const handleSettings = () => {
+        toast.info("Booking Settings", {
+            description: "Booking configuration is currently under development."
+        });
+    };
+
+    const handleMoreOptions = (name: string) => {
+        toast.info(`Options for ${name}`, {
+            description: "More actions for this booking will be available soon."
+        });
+    };
+
+    const handleEditAvailability = (day: string) => {
+        toast.info(`Edit ${day} Availability`, {
+            description: "Availability management is currently under development."
+        });
+    };
 
     return (
         <div className="space-y-6">
@@ -34,11 +73,11 @@ export default function BookingsPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline">
+                    <Button variant="outline" onClick={handleSettings}>
                         <Settings2 className="mr-2 h-4 w-4" />
                         Settings
                     </Button>
-                    <Button>
+                    <Button onClick={handleNewEvent}>
                         <Plus className="mr-2 h-4 w-4" />
                         New Event Type
                     </Button>
@@ -99,7 +138,7 @@ export default function BookingsPage() {
                                             </div>
                                         </div>
                                         <div className="ml-4">
-                                            <Button variant="ghost" size="icon">
+                                            <Button variant="ghost" size="icon" onClick={() => handleMoreOptions(booking.name)}>
                                                 <MoreVertical className="h-4 w-4" />
                                             </Button>
                                         </div>
@@ -131,14 +170,29 @@ export default function BookingsPage() {
                                             Booking link: <span className="text-primary underline">{event.slug}</span>
                                         </p>
                                         <div className="mt-4 flex gap-2">
-                                            <Button variant="outline" className="flex-1">Copy Link</Button>
-                                            <Button variant="outline" className="flex-1">Edit</Button>
+                                            <Button
+                                                variant="outline"
+                                                className="flex-1"
+                                                onClick={() => handleCopyLink(event.slug)}
+                                            >
+                                                Copy Link
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                className="flex-1"
+                                                onClick={() => handleEdit(event.title)}
+                                            >
+                                                Edit
+                                            </Button>
                                         </div>
                                     </div>
                                 </CardContent>
                             </Card>
                         ))}
-                        <button className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted p-8 transition-colors hover:bg-muted/50 hover:border-primary">
+                        <button
+                            className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted p-8 transition-colors hover:bg-muted/50 hover:border-primary"
+                            onClick={handleNewEvent}
+                        >
                             <Plus className="mb-4 h-12 w-12 text-muted-foreground" />
                             <span className="font-semibold">Add New Event Type</span>
                             <span className="mt-1 text-sm text-muted-foreground text-center">
@@ -171,7 +225,7 @@ export default function BookingsPage() {
                                             <span className="text-sm text-muted-foreground italic">Unavailable</span>
                                         )}
                                     </div>
-                                    <Button variant="ghost" size="sm">Edit</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => handleEditAvailability(day)}>Edit</Button>
                                 </div>
                             ))}
                         </CardContent>
