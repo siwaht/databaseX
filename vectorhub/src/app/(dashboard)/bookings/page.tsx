@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { EventEditorDialog } from "@/components/bookings/EventEditorDialog";
 import { BookingSettingsDialog } from "@/components/bookings/BookingSettingsDialog";
 import { BookingIntegrationDialog } from "@/components/bookings/BookingIntegrationDialog";
+import { AvailabilityDialog } from "@/components/bookings/AvailabilityDialog";
 import { EventType } from "@/types/booking";
 
 
@@ -45,6 +46,10 @@ export default function BookingsPage() {
     const [isIntegrationOpen, setIsIntegrationOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
     const [selectedIntegration, setSelectedIntegration] = useState<any | undefined>(undefined);
+    // Availability State
+    const [availability, setAvailability] = useState<{ [day: string]: { start: string; end: string } | null }>({});
+    const [editingDay, setEditingDay] = useState<string | null>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Import/Export Handlers
@@ -89,15 +94,22 @@ export default function BookingsPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const [eventsRes, integrationsRes, bookingsRes] = await Promise.all([
+                const [eventsRes, integrationsRes, bookingsRes, settingsRes] = await Promise.all([
                     fetch('/api/bookings/event-types'),
                     fetch('/api/integrations'),
-                    fetch('/api/bookings')
+                    fetch('/api/bookings'),
+                    fetch('/api/bookings/settings')
                 ]);
 
                 if (eventsRes.ok) setEvents(await eventsRes.json());
                 if (integrationsRes.ok) setIntegrations(await integrationsRes.json());
                 if (bookingsRes.ok) setBookings(await bookingsRes.json());
+                if (settingsRes.ok) {
+                    const settings = await settingsRes.json();
+                    if (settings.availability) {
+                        setAvailability(settings.availability);
+                    }
+                }
             } catch (error) {
                 console.error("Failed to load data", error);
                 toast.error("Failed to load dashboard data");
@@ -195,9 +207,33 @@ export default function BookingsPage() {
     };
 
     const handleEditAvailability = (day: string) => {
-        toast.info(`Edit ${day} Availability`, {
-            description: "Availability management is currently under development."
-        });
+        setEditingDay(day);
+    };
+
+    const handleSaveAvailability = async (day: string, dayAvailability: { start: string; end: string } | null) => {
+        const newAvailability = { ...availability, [day]: dayAvailability };
+        setAvailability(newAvailability);
+
+        // Fetch current settings to preserve other fields like timezone
+        try {
+            const settingsRes = await fetch('/api/bookings/settings');
+            const currentSettings = settingsRes.ok ? await settingsRes.json() : {};
+
+            const res = await fetch('/api/bookings/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...currentSettings,
+                    availability: newAvailability,
+                }),
+            });
+
+            if (!res.ok) throw new Error("Failed to save availability");
+            toast.success(`${day} availability updated`);
+        } catch (error) {
+            toast.error("Failed to save availability");
+            // Revert on error could be added here
+        }
     };
 
     return (
@@ -361,11 +397,11 @@ export default function BookingsPage() {
                                 <div key={day} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
                                     <div className="flex items-center gap-4">
                                         <div className="w-24 font-medium">{day}</div>
-                                        {i < 5 ? (
+                                        {availability[day] ? (
                                             <div className="flex items-center gap-2">
-                                                <Badge>9:00 AM</Badge>
+                                                <Badge>{availability[day]?.start}</Badge>
                                                 <span className="text-muted-foreground">-</span>
-                                                <Badge>5:00 PM</Badge>
+                                                <Badge>{availability[day]?.end}</Badge>
                                             </div>
                                         ) : (
                                             <span className="text-sm text-muted-foreground italic">Unavailable</span>
@@ -379,6 +415,7 @@ export default function BookingsPage() {
                 </TabsContent>
 
                 <TabsContent value="integrations" className="space-y-6">
+                    {/* ... (integrations content) ... */}
                     <div className="flex items-center justify-between">
                         <div>
                             <h3 className="text-lg font-medium">Active Integrations</h3>
@@ -456,6 +493,14 @@ export default function BookingsPage() {
                 onOpenChange={setIsIntegrationOpen}
                 integration={selectedIntegration}
                 onSave={handleSaveIntegration}
+            />
+
+            <AvailabilityDialog
+                open={!!editingDay}
+                onOpenChange={(open) => !open && setEditingDay(null)}
+                day={editingDay || ""}
+                currentAvailability={editingDay ? availability[editingDay] : null}
+                onSave={handleSaveAvailability}
             />
         </div>
     );
