@@ -92,9 +92,13 @@ export function BookingSettingsDialog({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="UTC">UTC (GMT+0)</SelectItem>
+                                <SelectItem value="UK">London (GMT+0)</SelectItem>
+                                <SelectItem value="CET">Central Europe (GMT+1)</SelectItem>
+                                <SelectItem value="AST">Riyadh (GMT+3)</SelectItem>
+                                <SelectItem value="GST">Dubai (GMT+4)</SelectItem>
+                                <SelectItem value="IST">India Standard Time (GMT+5:30)</SelectItem>
                                 <SelectItem value="EST">Eastern Time (GMT-5)</SelectItem>
                                 <SelectItem value="PST">Pacific Time (GMT-8)</SelectItem>
-                                <SelectItem value="IST">India Standard Time (GMT+5:30)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
