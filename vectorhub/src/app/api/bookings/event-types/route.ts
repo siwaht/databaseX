@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-
-let eventTypes = [
-    { id: "intro", name: "Intro Call", duration: 15, slug: "intro-call", isActive: true },
-    { id: "demo", name: "Product Demo", duration: 45, slug: "demo", isActive: true },
-];
+import { listEventTypes, createEventType, updateEventType } from "@/lib/bookings/store";
 
 export async function GET() {
     try {
+        const eventTypes = await listEventTypes();
         return NextResponse.json(eventTypes);
     } catch (error) {
         logger.error("GET /api/bookings/event-types failed", error as Error);
@@ -18,15 +15,21 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const data = await request.json();
-        const newEvent = {
-            id: Math.random().toString(36).substring(7),
-            ...data,
-            isActive: true,
-        };
-        eventTypes.push(newEvent);
-        return NextResponse.json(newEvent, { status: 201 });
+
+        if (data.id) {
+            // Update existing
+            const updated = await updateEventType(data.id, data);
+            return NextResponse.json(updated);
+        } else {
+            // Create new
+            const newEventType = await createEventType({
+                id: crypto.randomUUID(),
+                ...data
+            });
+            return NextResponse.json(newEventType, { status: 201 });
+        }
     } catch (error) {
         logger.error("POST /api/bookings/event-types failed", error as Error);
-        return NextResponse.json({ error: "Failed to create event type" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to save event type" }, { status: 500 });
     }
 }

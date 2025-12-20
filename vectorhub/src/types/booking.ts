@@ -7,7 +7,7 @@ export interface EventType {
     duration: number; // in minutes
     slug: string;
     isActive: boolean;
-    color?: string;
+    color: string;
 }
 
 export interface Booking {
@@ -21,6 +21,8 @@ export interface Booking {
     guestNotes?: string;
     status: BookingStatus;
     createdAt: string;
+    meetingUrl?: string;
+    agenda?: string;
 }
 
 export interface DaySchedule {
@@ -37,4 +39,13 @@ export interface Availability {
     name: string;
     schedule: DaySchedule[];
     isDefault: boolean;
+}
+
+export interface BookingSettings {
+    id: string; // Singleton "default"
+    timezone: string;
+    availability: {
+        [day: string]: { start: string; end: string } | null
+    };
+    brandColor: string;
 }

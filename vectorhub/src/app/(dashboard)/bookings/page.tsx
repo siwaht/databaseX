@@ -6,13 +6,10 @@ import {
     Clock,
     Plus,
     Settings2,
-    ChevronRight,
     Search,
     Filter,
     MoreVertical,
-    CheckCircle2,
-    XCircle,
-    User
+    User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,20 +18,50 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { Webhook, RadioTower, ExternalLink } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { EventEditorDialog } from "@/components/bookings/EventEditorDialog";
+import { BookingSettingsDialog } from "@/components/bookings/BookingSettingsDialog";
+import { BookingIntegrationDialog } from "@/components/bookings/BookingIntegrationDialog";
 import { EventType } from "@/types/booking";
 
-const DEFAULT_EVENTS: EventType[] = [
-    { id: "1", name: "Intro Call", duration: 15, slug: "/intro-call", description: "Quick intro call.", isActive: true, color: "bg-blue-500" },
-    { id: "2", name: "Product Demo", duration: 45, slug: "/demo", description: "Full product walkthrough.", isActive: true, color: "bg-purple-500" },
-    { id: "3", name: "Technical Setup", duration: 60, slug: "/setup", description: "Technical onboarding session.", isActive: true, color: "bg-emerald-500" },
-];
+
+import { useEffect } from "react";
+
+// ... imports ...
 
 export default function BookingsPage() {
     const [activeTab, setActiveTab] = useState("bookings");
-    const [events, setEvents] = useState<EventType[]>(DEFAULT_EVENTS);
+    const [events, setEvents] = useState<EventType[]>([]);
+    const [integrations, setIntegrations] = useState<any[]>([]);
+    const [bookings, setBookings] = useState<any[]>([]);
+
+    // Dialog States
     const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isIntegrationOpen, setIsIntegrationOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
+
+    // Load data
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [eventsRes, integrationsRes, bookingsRes] = await Promise.all([
+                    fetch('/api/bookings/event-types'),
+                    fetch('/api/integrations'),
+                    fetch('/api/bookings')
+                ]);
+
+                if (eventsRes.ok) setEvents(await eventsRes.json());
+                if (integrationsRes.ok) setIntegrations(await integrationsRes.json());
+                if (bookingsRes.ok) setBookings(await bookingsRes.json());
+            } catch (error) {
+                console.error("Failed to load data", error);
+                toast.error("Failed to load dashboard data");
+            }
+        };
+        loadData();
+    }, []);
 
     const handleCopyLink = (slug: string) => {
         const fullLink = `${window.location.origin}/book${slug}`;
@@ -54,23 +81,52 @@ export default function BookingsPage() {
         setIsEditorOpen(true);
     };
 
-    const handleSaveEvent = (savedEvent: EventType) => {
-        setEvents(prev => {
-            const exists = prev.find(e => e.id === savedEvent.id);
-            if (exists) {
-                toast.success("Event type updated successfully");
-                return prev.map(e => e.id === savedEvent.id ? savedEvent : e);
-            } else {
-                toast.success("New event type created");
-                return [...prev, savedEvent];
-            }
-        });
+    const handleSaveEvent = async (savedEvent: EventType) => {
+        try {
+            const res = await fetch('/api/bookings/event-types', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(savedEvent)
+            });
+
+            if (!res.ok) throw new Error("Failed to save");
+            const updatedEvent = await res.json();
+
+            setEvents(prev => {
+                const exists = prev.find(e => e.id === updatedEvent.id);
+                if (exists) {
+                    toast.success("Event type updated successfully");
+                    return prev.map(e => e.id === updatedEvent.id ? updatedEvent : e);
+                } else {
+                    toast.success("New event type created");
+                    return [...prev, updatedEvent];
+                }
+            });
+        } catch (error) {
+            toast.error("Failed to save event type");
+        }
+    };
+
+    const handleSaveIntegration = async (integration: any) => {
+        try {
+            const res = await fetch('/api/integrations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(integration)
+            });
+
+            if (!res.ok) throw new Error("Failed to save");
+            const saved = await res.json();
+
+            setIntegrations(prev => [...prev, saved]);
+            setIsIntegrationOpen(false); // Close dialog here since page handles save
+        } catch (error) {
+            toast.error("Failed to save integration");
+        }
     };
 
     const handleSettings = () => {
-        toast.info("Booking Settings", {
-            description: "Booking configuration is currently under development."
-        });
+        setIsSettingsOpen(true);
     };
 
     const handleMoreOptions = (name: string) => {
@@ -107,10 +163,11 @@ export default function BookingsPage() {
             </div>
 
             <Tabs defaultValue="bookings" className="w-full" onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+                <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
                     <TabsTrigger value="bookings">Bookings</TabsTrigger>
                     <TabsTrigger value="events">Event Types</TabsTrigger>
                     <TabsTrigger value="availability">Availability</TabsTrigger>
+                    <TabsTrigger value="integrations">Integrations</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="bookings" className="space-y-4">
@@ -125,13 +182,9 @@ export default function BookingsPage() {
                     </div>
 
                     <div className="grid gap-4">
-                        {[
-                            { name: "Asif Ahmed", email: "asif@example.com", date: "Dec 20, 2025", time: "10:00 AM - 10:30 AM", type: "Intro Call", status: "confirmed" },
-                            { name: "John Doe", email: "john@example.com", date: "Dec 21, 2025", time: "2:00 PM - 2:45 PM", type: "Product Demo", status: "pending" },
-                            { name: "Sarah Smith", email: "sarah@example.com", date: "Dec 22, 2025", time: "11:00 AM - 11:30 AM", type: "Intro Call", status: "confirmed" },
-                        ].map((booking, i) => (
+                        {bookings.map((booking, i) => (
                             <motion.div
-                                key={i}
+                                key={booking.id}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.05 }}
@@ -143,20 +196,20 @@ export default function BookingsPage() {
                                         </div>
                                         <div className="flex-1 space-y-1">
                                             <div className="flex items-center justify-between">
-                                                <p className="text-sm font-medium leading-none">{booking.name}</p>
+                                                <p className="text-sm font-medium leading-none">{booking.guestName}</p>
                                                 <Badge variant={booking.status === 'confirmed' ? "default" : "outline"}>
                                                     {booking.status}
                                                 </Badge>
                                             </div>
                                             <div className="flex items-center text-sm text-muted-foreground">
                                                 <Calendar className="mr-1 h-3 w-3" />
-                                                {booking.date}
+                                                {new Date(booking.startTime).toLocaleDateString()}
                                                 <span className="mx-2">•</span>
                                                 <Clock className="mr-1 h-3 w-3" />
-                                                {booking.time}
+                                                {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </div>
                                             <div className="text-xs text-muted-foreground">
-                                                Type: <span className="font-semibold text-foreground">{booking.type}</span>
+                                                Type: <span className="font-semibold text-foreground">{booking.eventTypeName}</span>
                                             </div>
                                         </div>
                                         <div className="ml-4">
@@ -174,30 +227,31 @@ export default function BookingsPage() {
                 <TabsContent value="events" className="space-y-4">
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {events.map((event) => (
-                            <Card key={event.id} className="overflow-hidden border-t-4" style={{ borderColor: 'var(--primary)' }}>
-                                <CardHeader>
+                            <Card key={event.id} className="group relative overflow-hidden transition-all hover:shadow-md">
+                                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${event.color}`} />
+                                <CardHeader className="pl-6">
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="text-xl">{event.name}</CardTitle>
-                                        <div className={`h-3 w-3 rounded-full ${event.color}`} />
+                                        <Switch checked={event.isActive} />
                                     </div>
                                     <CardDescription>{event.duration} min • One-on-One</CardDescription>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="pl-6">
                                     <div className="flex flex-col gap-2">
                                         <p className="text-sm text-muted-foreground">
-                                            Booking link: <span className="text-primary underline">{event.slug}</span>
+                                            Booking link: <span className="text-primary hover:underline cursor-pointer">{event.slug}</span>
                                         </p>
-                                        <div className="mt-4 flex gap-2">
+                                        <div className="mt-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <Button
                                                 variant="outline"
-                                                className="flex-1"
+                                                className="flex-1 h-9 text-xs"
                                                 onClick={() => handleCopyLink(event.slug)}
                                             >
                                                 Copy Link
                                             </Button>
                                             <Button
                                                 variant="outline"
-                                                className="flex-1"
+                                                className="flex-1 h-9 text-xs"
                                                 onClick={() => handleEdit(event)}
                                             >
                                                 Edit
@@ -249,6 +303,66 @@ export default function BookingsPage() {
                         </CardContent>
                     </Card>
                 </TabsContent>
+
+                <TabsContent value="integrations" className="space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-medium">Active Integrations</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Connect your booking flow to external tools.
+                            </p>
+                        </div>
+                        <Button onClick={() => setIsIntegrationOpen(true)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Connection
+                        </Button>
+                    </div>
+
+                    <div className="grid gap-4">
+                        {integrations.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-lg border-muted">
+                                <div className="p-3 rounded-full bg-muted/50 mb-4">
+                                    <ExternalLink className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <h3 className="text-lg font-medium">No integrations yet</h3>
+                                <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                                    Add a webhook or MCP server to automate your workflow when a booking happens.
+                                </p>
+                            </div>
+                        ) : (
+                            integrations.map((integration) => (
+                                <Card key={integration.id}>
+                                    <div className="flex items-center p-4 gap-4">
+                                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            {integration.type === 'webhook' ? (
+                                                <Webhook className="h-5 w-5 text-primary" />
+                                            ) : (
+                                                <RadioTower className="h-5 w-5 text-primary" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="font-medium">{integration.name}</h4>
+                                                <Badge variant="secondary" className="text-xs uppercase">
+                                                    {integration.type}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-sm text-muted-foreground truncate max-w-md">
+                                                {integration.config.url}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-200">
+                                                Active
+                                            </Badge>
+                                            <Button variant="ghost" size="sm">Configure</Button>
+                                        </div>
+                                    </div>
+                                </Card>
+                            ))
+                        )}
+                    </div>
+                </TabsContent>
             </Tabs>
 
             <EventEditorDialog
@@ -256,6 +370,17 @@ export default function BookingsPage() {
                 onOpenChange={setIsEditorOpen}
                 event={selectedEvent}
                 onSave={handleSaveEvent}
+            />
+
+            <BookingSettingsDialog
+                open={isSettingsOpen}
+                onOpenChange={setIsSettingsOpen}
+            />
+
+            <BookingIntegrationDialog
+                open={isIntegrationOpen}
+                onOpenChange={setIsIntegrationOpen}
+                onSave={handleSaveIntegration}
             />
         </div>
     );
