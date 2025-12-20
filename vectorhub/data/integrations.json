@@ -1,0 +1,13 @@
+[
+  {
+    "id": "a6c30e35-f399-4aec-954a-f362c873e120",
+    "createdAt": "2025-12-20T05:36:57.237Z",
+    "status": "connected",
+    "type": "mcp",
+    "name": "dental",
+    "config": {
+      "url": "https://115f4c9e-7d45-48eb-82d7-cacac0faf378-00-3ows3qyjjtqxt.riker.replit.dev/book/dental-drilling",
+      "secret": ""
+    }
+  }
+]

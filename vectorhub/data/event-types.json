@@ -1,0 +1,11 @@
+[
+  {
+    "id": "7e8547fd-3e69-4948-a17b-68fcf80c9385",
+    "name": "Dental Drilling",
+    "slug": "/dental-drilling",
+    "duration": 60,
+    "description": "Dental Drilling mate",
+    "isActive": true,
+    "color": "bg-rose-500"
+  }
+]
