@@ -22,6 +22,10 @@ export async function updateBooking(id: string, updates: Partial<Booking>) {
     return bookingsStore.update(id, updates);
 }
 
+export async function deleteBooking(id: string) {
+    return bookingsStore.delete(id);
+}
+
 export async function getBookingSettings() {
     const settings = await settingsStore.getById("default");
     if (!settings) {
