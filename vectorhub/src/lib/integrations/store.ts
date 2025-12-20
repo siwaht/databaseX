@@ -31,6 +31,10 @@ export async function createIntegration(integration: Omit<Integration, "id" | "c
     return store.create(newIntegration);
 }
 
+export async function restoreIntegrations(integrations: Integration[]) {
+    return store.restore(integrations);
+}
+
 export async function updateIntegration(id: string, updates: Partial<Integration>) {
     return store.update(id, updates);
 }

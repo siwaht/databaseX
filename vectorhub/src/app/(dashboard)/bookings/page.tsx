@@ -9,8 +9,12 @@ import {
     Search,
     Filter,
     MoreVertical,
+    MoreVertical,
     User,
+    Download,
+    Upload,
 } from "lucide-react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,6 +45,47 @@ export default function BookingsPage() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isIntegrationOpen, setIsIntegrationOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
+
+    const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Import/Export Handlers
+    const handleExport = () => {
+        window.open('/api/admin/data', '_blank');
+        toast.success("Export started");
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const json = JSON.parse(event.target?.result as string);
+                const res = await fetch('/api/admin/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(json)
+                });
+
+                if (!res.ok) throw new Error("Import failed");
+
+                toast.success("Data imported successfully. Reloading...");
+                setTimeout(() => window.location.reload(), 1500);
+            } catch (error) {
+                console.error("Import error", error);
+                toast.error("Failed to import data. Invalid file format.");
+            }
+        };
+        reader.readAsText(file);
+        // Reset input
+        e.target.value = '';
+    };
 
     // Load data
     useEffect(() => {
@@ -155,6 +200,21 @@ export default function BookingsPage() {
                         <Settings2 className="mr-2 h-4 w-4" />
                         Settings
                     </Button>
+                    <Button variant="outline" onClick={handleExport}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export
+                    </Button>
+                    <Button variant="outline" onClick={handleImportClick}>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Import
+                    </Button>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept=".json"
+                        onChange={handleFileChange}
+                    />
                     <Button onClick={handleNewEvent}>
                         <Plus className="mr-2 h-4 w-4" />
                         New Event Type

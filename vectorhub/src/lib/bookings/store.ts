@@ -14,6 +14,10 @@ export async function createBooking(booking: Booking) {
     return bookingsStore.create(booking);
 }
 
+export async function restoreBookings(bookings: Booking[]) {
+    return bookingsStore.restore(bookings);
+}
+
 export async function updateBooking(id: string, updates: Partial<Booking>) {
     return bookingsStore.update(id, updates);
 }
@@ -49,12 +53,21 @@ export async function saveBookingSettings(settings: Omit<BookingSettings, "id">)
     }
 }
 
+export async function restoreSettings(settings: BookingSettings) {
+    // Wrap single object in array for store
+    return settingsStore.restore([settings]);
+}
+
 export async function listEventTypes() {
     return eventTypesStore.getAll();
 }
 
 export async function createEventType(eventType: EventType) {
     return eventTypesStore.create(eventType);
+}
+
+export async function restoreEventTypes(eventTypes: EventType[]) {
+    return eventTypesStore.restore(eventTypes);
 }
 
 export async function updateEventType(id: string, updates: Partial<EventType>) {

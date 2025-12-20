@@ -75,4 +75,8 @@ export class JsonStore<T extends { id: string }> {
         await this.write(filtered);
         return true;
     }
+
+    async restore(data: T[]): Promise<void> {
+        await this.write(data);
+    }
 }
