@@ -9,7 +9,6 @@ import {
     Search,
     Filter,
     MoreVertical,
-    MoreVertical,
     User,
     Download,
     Upload,
@@ -44,8 +43,6 @@ export default function BookingsPage() {
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isIntegrationOpen, setIsIntegrationOpen] = useState(false);
-    const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
-
     const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
