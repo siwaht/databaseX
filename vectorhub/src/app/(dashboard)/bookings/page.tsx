@@ -21,9 +21,20 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { EventEditorDialog } from "@/components/bookings/EventEditorDialog";
+import { EventType } from "@/types/booking";
+
+const DEFAULT_EVENTS: EventType[] = [
+    { id: "1", name: "Intro Call", duration: 15, slug: "/intro-call", description: "Quick intro call.", isActive: true, color: "bg-blue-500" },
+    { id: "2", name: "Product Demo", duration: 45, slug: "/demo", description: "Full product walkthrough.", isActive: true, color: "bg-purple-500" },
+    { id: "3", name: "Technical Setup", duration: 60, slug: "/setup", description: "Technical onboarding session.", isActive: true, color: "bg-emerald-500" },
+];
 
 export default function BookingsPage() {
     const [activeTab, setActiveTab] = useState("bookings");
+    const [events, setEvents] = useState<EventType[]>(DEFAULT_EVENTS);
+    const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
 
     const handleCopyLink = (slug: string) => {
         const fullLink = `${window.location.origin}/book${slug}`;
@@ -33,15 +44,26 @@ export default function BookingsPage() {
         });
     };
 
-    const handleEdit = (title: string) => {
-        toast.info(`Editing ${title}`, {
-            description: "The edit dialog is currently under development."
-        });
+    const handleEdit = (event: EventType) => {
+        setSelectedEvent(event);
+        setIsEditorOpen(true);
     };
 
     const handleNewEvent = () => {
-        toast.info("New Event Type", {
-            description: "The event creation wizard is currently under development."
+        setSelectedEvent(undefined);
+        setIsEditorOpen(true);
+    };
+
+    const handleSaveEvent = (savedEvent: EventType) => {
+        setEvents(prev => {
+            const exists = prev.find(e => e.id === savedEvent.id);
+            if (exists) {
+                toast.success("Event type updated successfully");
+                return prev.map(e => e.id === savedEvent.id ? savedEvent : e);
+            } else {
+                toast.success("New event type created");
+                return [...prev, savedEvent];
+            }
         });
     };
 
@@ -151,18 +173,14 @@ export default function BookingsPage() {
 
                 <TabsContent value="events" className="space-y-4">
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {[
-                            { title: "Intro Call", duration: "15 min", slug: "/intro-call", color: "bg-blue-500" },
-                            { title: "Product Demo", duration: "45 min", slug: "/demo", color: "bg-purple-500" },
-                            { title: "Technical Setup", duration: "60 min", slug: "/setup", color: "bg-emerald-500" },
-                        ].map((event, i) => (
-                            <Card key={i} className="overflow-hidden border-t-4" style={{ borderColor: 'var(--primary)' }}>
+                        {events.map((event) => (
+                            <Card key={event.id} className="overflow-hidden border-t-4" style={{ borderColor: 'var(--primary)' }}>
                                 <CardHeader>
                                     <div className="flex items-center justify-between">
-                                        <CardTitle className="text-xl">{event.title}</CardTitle>
+                                        <CardTitle className="text-xl">{event.name}</CardTitle>
                                         <div className={`h-3 w-3 rounded-full ${event.color}`} />
                                     </div>
-                                    <CardDescription>{event.duration} • One-on-One</CardDescription>
+                                    <CardDescription>{event.duration} min • One-on-One</CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="flex flex-col gap-2">
@@ -180,7 +198,7 @@ export default function BookingsPage() {
                                             <Button
                                                 variant="outline"
                                                 className="flex-1"
-                                                onClick={() => handleEdit(event.title)}
+                                                onClick={() => handleEdit(event)}
                                             >
                                                 Edit
                                             </Button>
@@ -232,6 +250,13 @@ export default function BookingsPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            <EventEditorDialog
+                open={isEditorOpen}
+                onOpenChange={setIsEditorOpen}
+                event={selectedEvent}
+                onSave={handleSaveEvent}
+            />
         </div>
     );
 }
