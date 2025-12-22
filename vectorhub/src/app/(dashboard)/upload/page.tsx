@@ -303,7 +303,6 @@ export default function UploadPage() {
             ensureTargetsSelected,
             selectedConnection,
             selectedCollection,
-            addDocument,
             syncCollectionsFromDb,
             connections,
         ]
@@ -354,7 +353,6 @@ export default function UploadPage() {
             ensureTargetsSelected,
             selectedConnection,
             selectedCollection,
-            addDocument,
             syncCollectionsFromDb,
             // syncToExternalConnections,
             connections,
@@ -409,7 +407,6 @@ export default function UploadPage() {
             ensureTargetsSelected,
             selectedConnection,
             selectedCollection,
-            addDocument,
             syncCollectionsFromDb,
             // syncToExternalConnections,
             connections,
@@ -420,293 +417,293 @@ export default function UploadPage() {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="space-y-6">
-            <h2 className="text-3xl font-bold tracking-tight">Upload Data</h2>
-            <p className="text-muted-foreground">
-                Import files or text into your vector database.
-            </p>
-        </div>
+            <div className="space-y-6">
+                <h2 className="text-3xl font-bold tracking-tight">Upload Data</h2>
+                <p className="text-muted-foreground">
+                    Import files or text into your vector database.
+                </p>
+            </div>
 
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-lg">Target Destination</CardTitle>
-                    <CardDescription>
-                        Select where your data should be stored
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Connection</Label>
-                            <Select
-                                value={selectedConnection}
-                                onValueChange={setSelectedConnection}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select connection" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {connections.length === 0 ? (
-                                        <SelectItem value="_empty" disabled>
-                                            No connections available
-                                        </SelectItem>
-                                    ) : (
-                                        connections.map((c) => (
-                                            <SelectItem key={c.id} value={c.id}>
-                                                {c.name} ({c.type})
-                                            </SelectItem>
-                                        ))
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Collection</Label>
-                            <Select
-                                value={selectedCollection}
-                                onValueChange={setSelectedCollection}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select collection" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {collections.length === 0 ? (
-                                        <SelectItem value="_empty" disabled>
-                                            No collections available
-                                        </SelectItem>
-                                    ) : (
-                                        collections.map((c) => (
-                                            <SelectItem key={c.name} value={c.name}>
-                                                {c.name}
-                                            </SelectItem>
-                                        ))
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    {!hasTargetsSelected && (
-                        <div className="mt-4 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-                            <AlertCircle className="h-4 w-4" />
-                            Please select both a connection and collection to upload data
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
-
-        {hasSyncConnections && (
             <div className="space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            Sync to External Services
-                            {selectedSyncConnections.length > 0 && (
-                                <Badge variant="secondary" className="ml-2">
-                                    {selectedSyncConnections.length} selected
-                                </Badge>
-                            )}
-                        </CardTitle>
+                        <CardTitle className="text-lg">Target Destination</CardTitle>
                         <CardDescription>
-                            Optionally sync uploaded data to webhook and MCP connections
+                            Select where your data should be stored
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-4">
-                            {webhookConnections.length > 0 && (
-                                <div className="space-y-3">
-                                    <Label className="flex items-center gap-2 text-sm font-medium">
-                                        <Webhook className="h-4 w-4" />
-                                        Webhook Connections
-                                    </Label>
-                                    <div className="space-y-2">
-                                        {webhookConnections.map((conn) => (
-                                            <div
-                                                key={conn.id}
-                                                className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
-                                                        <Webhook className="h-4 w-4 text-muted-foreground" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium text-sm">{conn.name}</p>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {conn.status === "connected" ? "Ready to sync" : "Not connected"}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <Switch
-                                                    checked={syncToConnections[conn.id] || false}
-                                                    onCheckedChange={() => toggleSyncConnection(conn.id)}
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {mcpConnections.length > 0 && (
-                                <div className="space-y-3">
-                                    <Label className="flex items-center gap-2 text-sm font-medium">
-                                        <Cpu className="h-4 w-4" />
-                                        MCP Connections
-                                    </Label>
-                                    <div className="space-y-2">
-                                        {mcpConnections.map((conn) => (
-                                            <div
-                                                key={conn.id}
-                                                className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
-                                                        <Cpu className="h-4 w-4 text-muted-foreground" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium text-sm">{conn.name}</p>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {conn.status === "connected" ? "Ready to sync" : "Not connected"}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <Switch
-                                                    checked={syncToConnections[conn.id] || false}
-                                                    onCheckedChange={() => toggleSyncConnection(conn.id)}
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {selectedSyncConnections.length > 0 && (
-                                <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 pt-2">
-                                    <CheckCircle2 className="h-4 w-4" />
-                                    Data will be synced to {selectedSyncConnections.length} connection(s) on upload
-                                </div>
-                            )}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Connection</Label>
+                                <Select
+                                    value={selectedConnection}
+                                    onValueChange={setSelectedConnection}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select connection" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {connections.length === 0 ? (
+                                            <SelectItem value="_empty" disabled>
+                                                No connections available
+                                            </SelectItem>
+                                        ) : (
+                                            connections.map((c) => (
+                                                <SelectItem key={c.id} value={c.id}>
+                                                    {c.name} ({c.type})
+                                                </SelectItem>
+                                            ))
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Collection</Label>
+                                <Select
+                                    value={selectedCollection}
+                                    onValueChange={setSelectedCollection}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select collection" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {collections.length === 0 ? (
+                                            <SelectItem value="_empty" disabled>
+                                                No collections available
+                                            </SelectItem>
+                                        ) : (
+                                            collections.map((c) => (
+                                                <SelectItem key={c.name} value={c.name}>
+                                                    {c.name}
+                                                </SelectItem>
+                                            ))
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
+                        {!hasTargetsSelected && (
+                            <div className="mt-4 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                                <AlertCircle className="h-4 w-4" />
+                                Please select both a connection and collection to upload data
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
-        )}
 
-        <div className="space-y-6">
-            <Collapsible
-                open={isAdvancedOpen}
-                onOpenChange={setIsAdvancedOpen}
-                className="w-full space-y-2"
-            >
-                <div className="flex items-center justify-between px-4 py-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-                    <div className="flex items-center gap-2">
-                        <Settings2 className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Advanced Settings</span>
-                    </div>
-                    <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="sm" className="w-9 p-0">
-                            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isAdvancedOpen ? "rotate-180" : ""}`} />
-                            <span className="sr-only">Toggle</span>
-                        </Button>
-                    </CollapsibleTrigger>
+            {hasSyncConnections && (
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                Sync to External Services
+                                {selectedSyncConnections.length > 0 && (
+                                    <Badge variant="secondary" className="ml-2">
+                                        {selectedSyncConnections.length} selected
+                                    </Badge>
+                                )}
+                            </CardTitle>
+                            <CardDescription>
+                                Optionally sync uploaded data to webhook and MCP connections
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                {webhookConnections.length > 0 && (
+                                    <div className="space-y-3">
+                                        <Label className="flex items-center gap-2 text-sm font-medium">
+                                            <Webhook className="h-4 w-4" />
+                                            Webhook Connections
+                                        </Label>
+                                        <div className="space-y-2">
+                                            {webhookConnections.map((conn) => (
+                                                <div
+                                                    key={conn.id}
+                                                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+                                                            <Webhook className="h-4 w-4 text-muted-foreground" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-medium text-sm">{conn.name}</p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {conn.status === "connected" ? "Ready to sync" : "Not connected"}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <Switch
+                                                        checked={syncToConnections[conn.id] || false}
+                                                        onCheckedChange={() => toggleSyncConnection(conn.id)}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {mcpConnections.length > 0 && (
+                                    <div className="space-y-3">
+                                        <Label className="flex items-center gap-2 text-sm font-medium">
+                                            <Cpu className="h-4 w-4" />
+                                            MCP Connections
+                                        </Label>
+                                        <div className="space-y-2">
+                                            {mcpConnections.map((conn) => (
+                                                <div
+                                                    key={conn.id}
+                                                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+                                                            <Cpu className="h-4 w-4 text-muted-foreground" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-medium text-sm">{conn.name}</p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {conn.status === "connected" ? "Ready to sync" : "Not connected"}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <Switch
+                                                        checked={syncToConnections[conn.id] || false}
+                                                        onCheckedChange={() => toggleSyncConnection(conn.id)}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {selectedSyncConnections.length > 0 && (
+                                    <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 pt-2">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        Data will be synced to {selectedSyncConnections.length} connection(s) on upload
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
-                <CollapsibleContent className="space-y-2">
-                    <Card>
-                        <CardContent className="pt-6 space-y-6">
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="space-y-0.5">
-                                        <Label>Chunk Size</Label>
-                                        <p className="text-xs text-muted-foreground">
-                                            Characters per chunk (default: 1000)
-                                        </p>
-                                    </div>
-                                    <span className="text-sm font-medium tabular-nums">
-                                        {chunkSize[0]}
-                                    </span>
-                                </div>
-                                <Slider
-                                    value={chunkSize}
-                                    onValueChange={setChunkSize}
-                                    min={100}
-                                    max={4000}
-                                    step={100}
-                                />
-                            </div>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="space-y-0.5">
-                                        <Label>Chunk Overlap</Label>
-                                        <p className="text-xs text-muted-foreground">
-                                            Overlap between chunks (default: 200)
-                                        </p>
-                                    </div>
-                                    <span className="text-sm font-medium tabular-nums">
-                                        {chunkOverlap[0]}
-                                    </span>
-                                </div>
-                                <Slider
-                                    value={chunkOverlap}
-                                    onValueChange={setChunkOverlap}
-                                    min={0}
-                                    max={1000}
-                                    step={50}
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </CollapsibleContent>
-            </Collapsible>
-        </div>
+            )}
 
-        <div className="space-y-6">
-            <Tabs defaultValue="text" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="files" className="flex items-center gap-2">
-                        <Upload className="h-4 w-4" />
-                        File Upload
-                    </TabsTrigger>
-                    <TabsTrigger value="text" className="flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Text Input
-                    </TabsTrigger>
-                    <TabsTrigger value="scrape" className="flex items-center gap-2">
-                        <Globe className="h-4 w-4" />
-                        Scrape & Crawl
-                    </TabsTrigger>
-                </TabsList>
-                <TabsContent value="files" className="mt-4">
-                    <Card>
-                        <CardContent className="pt-6">
-                            <UploadZone
-                                onUpload={(files) => handleFileUpload(files, { chunkSize: chunkSize[0], chunkOverlap: chunkOverlap[0] })}
-                                disabled={!hasTargetsSelected || isUploading}
-                            />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                <TabsContent value="text" className="mt-4">
-                    <Card>
-                        <CardContent className="pt-6">
-                            <TextInputUpload
-                                onUpload={(title, content) => handleTextUpload(title, content, { chunkSize: chunkSize[0], chunkOverlap: chunkOverlap[0] })}
-                                disabled={!hasTargetsSelected || isUploading}
-                            />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                <TabsContent value="scrape" className="mt-4">
-                    <Card>
-                        <CardContent className="pt-6">
-                            <ScrapeUpload
-                                onUpload={(docs) => handleScrapeUpload(docs, { chunkSize: chunkSize[0], chunkOverlap: chunkOverlap[0] })}
-                                disabled={!hasTargetsSelected || isUploading}
-                            />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+            <div className="space-y-6">
+                <Collapsible
+                    open={isAdvancedOpen}
+                    onOpenChange={setIsAdvancedOpen}
+                    className="w-full space-y-2"
+                >
+                    <div className="flex items-center justify-between px-4 py-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                        <div className="flex items-center gap-2">
+                            <Settings2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Advanced Settings</span>
+                        </div>
+                        <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="w-9 p-0">
+                                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isAdvancedOpen ? "rotate-180" : ""}`} />
+                                <span className="sr-only">Toggle</span>
+                            </Button>
+                        </CollapsibleTrigger>
+                    </div>
+                    <CollapsibleContent className="space-y-2">
+                        <Card>
+                            <CardContent className="pt-6 space-y-6">
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-0.5">
+                                            <Label>Chunk Size</Label>
+                                            <p className="text-xs text-muted-foreground">
+                                                Characters per chunk (default: 1000)
+                                            </p>
+                                        </div>
+                                        <span className="text-sm font-medium tabular-nums">
+                                            {chunkSize[0]}
+                                        </span>
+                                    </div>
+                                    <Slider
+                                        value={chunkSize}
+                                        onValueChange={setChunkSize}
+                                        min={100}
+                                        max={4000}
+                                        step={100}
+                                    />
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-0.5">
+                                            <Label>Chunk Overlap</Label>
+                                            <p className="text-xs text-muted-foreground">
+                                                Overlap between chunks (default: 200)
+                                            </p>
+                                        </div>
+                                        <span className="text-sm font-medium tabular-nums">
+                                            {chunkOverlap[0]}
+                                        </span>
+                                    </div>
+                                    <Slider
+                                        value={chunkOverlap}
+                                        onValueChange={setChunkOverlap}
+                                        min={0}
+                                        max={1000}
+                                        step={50}
+                                    />
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </CollapsibleContent>
+                </Collapsible>
+            </div>
+
+            <div className="space-y-6">
+                <Tabs defaultValue="text" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="files" className="flex items-center gap-2">
+                            <Upload className="h-4 w-4" />
+                            File Upload
+                        </TabsTrigger>
+                        <TabsTrigger value="text" className="flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Text Input
+                        </TabsTrigger>
+                        <TabsTrigger value="scrape" className="flex items-center gap-2">
+                            <Globe className="h-4 w-4" />
+                            Scrape & Crawl
+                        </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="files" className="mt-4">
+                        <Card>
+                            <CardContent className="pt-6">
+                                <UploadZone
+                                    onUpload={(files) => handleFileUpload(files, { chunkSize: chunkSize[0], chunkOverlap: chunkOverlap[0] })}
+                                    disabled={!hasTargetsSelected || isUploading}
+                                />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                    <TabsContent value="text" className="mt-4">
+                        <Card>
+                            <CardContent className="pt-6">
+                                <TextInputUpload
+                                    onUpload={(title, content) => handleTextUpload(title, content, { chunkSize: chunkSize[0], chunkOverlap: chunkOverlap[0] })}
+                                    disabled={!hasTargetsSelected || isUploading}
+                                />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                    <TabsContent value="scrape" className="mt-4">
+                        <Card>
+                            <CardContent className="pt-6">
+                                <ScrapeUpload
+                                    onUpload={(docs) => handleScrapeUpload(docs, { chunkSize: chunkSize[0], chunkOverlap: chunkOverlap[0] })}
+                                    disabled={!hasTargetsSelected || isUploading}
+                                />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+            </div>
         </div>
-    </div>
     );
 }

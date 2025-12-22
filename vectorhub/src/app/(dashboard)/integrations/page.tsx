@@ -246,7 +246,7 @@ export default function IntegrationsPage() {
         } catch (error) {
             toast.error("Failed to save key");
         }
-    }, [newKeyName, newKeyType, newKeyProvider, newKeyValue, fetchKeys]);
+    }, [newKeyName, newKeyProvider, newKeyValue, fetchKeys]);
 
     const handleAddMcp = useCallback(() => {
         if (!newMcpName) {
