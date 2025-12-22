@@ -1,6 +1,7 @@
 {
   "name": "workspace",
   "version": "1.0.0",
+    "workspaces": ["vectorhub"],
   "main": "index.js",
   "scripts": {
     "dev": "npm run dev --prefix vectorhub",
