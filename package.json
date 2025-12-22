@@ -1,12 +1,10 @@
 {
   "name": "workspace",
   "version": "1.0.0",
-    "workspaces": ["vectorhub"],
-  "main": "index.js",
+   "main": "index.js",
   "scripts": {
     "dev": "npm run dev --prefix vectorhub",
-    "build": "npm run build --prefix vectorhub",
-    "start": "npm run start --prefix vectorhub",
+    "build": "cd vectorhub && npm ci && npm run build",    "start": "npm run start --prefix vectorhub",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
