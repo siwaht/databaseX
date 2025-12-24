@@ -65,7 +65,7 @@ async function deleteMongoDBDocuments(
         const db = client.db(config.database);
         const col = db.collection(collection);
 
-        const objectIds = ids.map((id) => {
+        const objectIds: (ObjectId | string)[] = ids.map((id) => {
             try {
                 return new ObjectId(id);
             } catch {
@@ -75,7 +75,7 @@ async function deleteMongoDBDocuments(
 
         const result = await col.deleteMany({
             $or: [
-                { _id: { $in: objectIds as any[] } },
+                { _id: { $in: objectIds } },
                 { id: { $in: ids } },
             ],
         });

@@ -1,35 +1,8 @@
 import type { VectorDocument } from "@/lib/db/adapters/base";
-import { ApiError, type ApiErrorResponse } from "./connections";
 import { ConnectionConfig } from "@/types/connections";
+import { handleResponse, getHeaders } from "./utils";
 
 const BASE_URL = "/api/documents";
-
-async function handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-        let errorData: ApiErrorResponse;
-        try {
-            errorData = await response.json();
-        } catch {
-            errorData = {
-                code: "UNKNOWN_ERROR",
-                message: `Request failed with status ${response.status}`,
-            };
-        }
-        throw new ApiError(errorData, response.status);
-    }
-    return response.json();
-}
-
-// Helper to add connection config to headers
-const getHeaders = (config?: ConnectionConfig) => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-    };
-    if (config) {
-        headers["x-connection-config"] = JSON.stringify(config);
-    }
-    return headers;
-};
 
 export interface AddDocumentsResult {
     ids: string[];

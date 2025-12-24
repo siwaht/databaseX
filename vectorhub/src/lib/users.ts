@@ -46,7 +46,7 @@ export async function createUser(data: Omit<User, "id" | "createdAt" | "lastLogi
 
 export async function updateUser(id: string, data: Partial<User>): Promise<void> {
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: (string | string[] | Date | undefined)[] = [];
     let paramCount = 1;
 
     if (data.email !== undefined) {

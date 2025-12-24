@@ -47,8 +47,8 @@ async function listMCPTools(config: MCPConfig): Promise<{ tools: MCPTool[]; erro
     
     // Extract auth header if present
     let authHeader: string | undefined;
-    if ((config as any).authToken) {
-        authHeader = (config as any).authToken;
+    if (config.authToken) {
+        authHeader = config.authToken;
     } else if (config.args && Array.isArray(config.args)) {
         const headerIndex = config.args.findIndex((arg: string) => arg === "--header");
         if (headerIndex !== -1 && config.args[headerIndex + 1]) {

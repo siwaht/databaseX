@@ -203,8 +203,8 @@ export class MCPAdapter implements VectorDBAdapter {
             arguments: {
                 collection,
                 documents,
-                embeddingModel: (this.config as any)?.modelPreferences?.embeddingModel,
-                dimensions: (this.config as any)?.modelPreferences?.dimensions,
+                embeddingModel: this.config?.modelPreferences?.embeddingModel,
+                dimensions: this.config?.modelPreferences?.dimensions,
             },
         });
 

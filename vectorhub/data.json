@@ -1,7 +1,0 @@
-{
-    "collection": "test",
-    "query": {
-        "text": "hello",
-        "topK": 5
-    }
-}

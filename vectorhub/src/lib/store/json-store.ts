@@ -28,7 +28,7 @@ export class JsonStore<T extends { id: string }> {
             return JSON.parse(data);
         } catch (error) {
             // If file doesn't exist, return empty array
-            if ((error as any).code === 'ENOENT') {
+            if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
                 return [];
             }
             throw error;

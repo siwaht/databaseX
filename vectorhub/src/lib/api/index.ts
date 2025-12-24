@@ -1,8 +1,8 @@
 // API Client Exports
 // Re-export all API functions for convenient access
 
-// Error handling
-export { ApiError, type ApiErrorResponse } from "./connections";
+// Error handling and utilities
+export { ApiError, type ApiErrorResponse, handleResponse, getHeaders } from "./utils";
 
 // Collections API
 export {

@@ -245,6 +245,12 @@ export interface MCPConfig {
     authToken?: string;
     timeout?: number;
 
+    // Model preferences for embedding
+    modelPreferences?: {
+        embeddingModel?: string;
+        dimensions?: number;
+    };
+
     // Capabilities (auto-detected or manually set)
     capabilities?: {
         tools?: boolean;
