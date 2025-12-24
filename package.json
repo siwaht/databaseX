@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "npm run dev --prefix vectorhub",
     "build": "cd vectorhub && npm ci && npm run build",
-    "deploy": "cd vectorhub && npx wrangler pages deploy .next",
+    "deploy": "cd vectorhub && npx @cloudflare/next-on-pages && npx wrangler pages deploy .vercel/output/static",
     "start": "npm run start --prefix vectorhub",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
