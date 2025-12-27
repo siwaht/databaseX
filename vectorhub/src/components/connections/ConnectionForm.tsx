@@ -233,25 +233,80 @@ const getFieldsForType = (type: VectorDBType) => {
     }
 };
 
-// Mock function to simulate testing a database connection
+// Real function to test database connection
 async function testDatabaseConnection(
     type: VectorDBType,
     name: string,
     config: Record<string, unknown>
 ): Promise<ConnectionTestData> {
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1000));
+    // For MongoDB Atlas, test the real connection
+    if (type === "mongodb_atlas") {
+        try {
+            const testResponse = await fetch("/api/db/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type, config }),
+            });
+            
+            const testResult = await testResponse.json();
+            
+            if (!testResult.success) {
+                return {
+                    success: false,
+                    connectionName: name,
+                    connectionType: type,
+                    error: testResult.message || "Connection failed",
+                };
+            }
 
-    // Simulate different responses based on type
+            // Fetch collections
+            const collectionsResponse = await fetch("/api/db/collections", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type, config }),
+            });
+            
+            let collections: { name: string; documentCount: number; dimensions: number }[] = [];
+            if (collectionsResponse.ok) {
+                const collectionsData = await collectionsResponse.json();
+                if (Array.isArray(collectionsData)) {
+                    collections = collectionsData.map((c: any) => ({
+                        name: c.name,
+                        documentCount: c.documentCount || 0,
+                        dimensions: c.dimensions || 0,
+                    }));
+                }
+            }
+
+            return {
+                success: true,
+                connectionName: name,
+                connectionType: type,
+                latency: 0,
+                databaseInfo: {
+                    version: "MongoDB Atlas",
+                    host: "Atlas Cluster",
+                    database: (config.database as string) || "default",
+                },
+                collections,
+            };
+        } catch (error) {
+            return {
+                success: false,
+                connectionName: name,
+                connectionType: type,
+                error: error instanceof Error ? error.message : "Connection failed",
+            };
+        }
+    }
+
+    // For other database types, use mock data for now
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
     const mockCollections = [
         { name: "documents", documentCount: 1250, dimensions: 1536 },
         { name: "embeddings", documentCount: 3400, dimensions: 768 },
-        { name: "vectors", documentCount: 890, dimensions: 1536 },
     ];
-
-    // Randomly select 1-3 collections for demo
-    const numCollections = Math.floor(Math.random() * 3) + 1;
-    const collections = mockCollections.slice(0, numCollections);
 
     const dbInfo: Record<VectorDBType, { version?: string; host?: string; database?: string }> = {
         pinecone: { version: "2024.1", host: (config.environment as string) || "us-east-1-aws" },
@@ -284,7 +339,7 @@ async function testDatabaseConnection(
         connectionType: type,
         latency: Math.floor(50 + Math.random() * 200),
         databaseInfo: dbInfo[type] || {},
-        collections,
+        collections: mockCollections,
     };
 }
 
