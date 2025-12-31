@@ -1,6 +1,12 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+// Allowed origins for CORS (configure based on your deployment)
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",") || [
+    "http://localhost:3000",
+    "http://localhost:5000",
+];
+
 export default withAuth(
     function middleware(request) {
         // Generate unique request ID for tracing
@@ -9,28 +15,33 @@ export default withAuth(
         // Get the response
         const response = NextResponse.next();
 
-        // Add request ID header
+        // Add request ID header for tracing
         response.headers.set("X-Request-ID", requestId);
+
+        // Add security headers
+        response.headers.set("X-Content-Type-Options", "nosniff");
+        response.headers.set("X-Frame-Options", "DENY");
+        response.headers.set("X-XSS-Protection", "1; mode=block");
 
         // Add CORS headers for API routes
         if (request.nextUrl.pathname.startsWith("/api/")) {
-            // Allow requests from same origin
             const origin = request.headers.get("origin");
 
-            // In production, you'd want to validate against allowed origins
-            if (origin) {
+            // Validate origin against allowed list
+            if (origin && (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*"))) {
                 response.headers.set("Access-Control-Allow-Origin", origin);
             }
 
             response.headers.set(
                 "Access-Control-Allow-Methods",
-                "GET, POST, PUT, DELETE, OPTIONS"
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS"
             );
             response.headers.set(
                 "Access-Control-Allow-Headers",
-                "Content-Type, Authorization, X-Request-ID"
+                "Content-Type, Authorization, X-Request-ID, X-Connection-Config"
             );
             response.headers.set("Access-Control-Max-Age", "86400");
+            response.headers.set("Access-Control-Allow-Credentials", "true");
 
             // Handle preflight requests
             if (request.method === "OPTIONS") {
@@ -48,17 +59,22 @@ export default withAuth(
             authorized: ({ req, token }) => {
                 const pathname = req.nextUrl.pathname;
 
-                // Public routes
-                if (
-                    pathname.startsWith("/api/auth") ||
-                    pathname.startsWith("/api/webhooks") ||
-                    pathname === "/login" ||
-                    pathname === "/register"
-                ) {
+                // Public routes that don't require authentication
+                const publicRoutes = [
+                    "/api/auth",
+                    "/api/health",
+                    "/api/webhooks",
+                    "/login",
+                    "/register",
+                    "/api/setup",
+                ];
+
+                // Check if current path starts with any public route
+                if (publicRoutes.some(route => pathname.startsWith(route))) {
                     return true;
                 }
 
-                // Protect dashboard and other API routes
+                // All other routes require authentication
                 return !!token;
             },
         },
@@ -70,6 +86,6 @@ export const config = {
         "/dashboard/:path*",
         "/users/:path*",
         "/api/:path*",
-        "/((?!_next/static|_next/image|favicon.ico).*)",
+        "/((?!_next/static|_next/image|favicon.ico|manifest.json|robots.txt|sitemap.xml).*)",
     ],
 };

@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import type { SearchResult } from "@/lib/db/adapters/base";
 import { generateEmbedding } from "@/lib/embeddings";
 import { searchMongoDBVectors, searchMongoDBText } from "@/lib/db/mongodb-utils";
+import { withRateLimit, RATE_LIMITS, createRateLimitResponse, addRateLimitHeaders } from "@/lib/rate-limit";
 
 const EXPECTED_EMBEDDING_DIMENSIONS = 1536;
 
@@ -22,6 +23,12 @@ function getConnectionConfig(request: Request): ConnectionConfig | null {
 }
 
 export async function POST(request: Request) {
+    // Apply rate limiting for search operations
+    const rateLimitResult = withRateLimit(request, RATE_LIMITS.search);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+        return rateLimitResult.response;
+    }
+
     const validation = await validateRequestBody(request, searchQuerySchema);
 
     if (!validation.success) {

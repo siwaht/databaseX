@@ -10,6 +10,7 @@ import { logger } from "@/lib/logger";
 import type { VectorDocument } from "@/lib/db/adapters/base";
 import { generateEmbedding } from "@/lib/embeddings";
 import { splitText } from "@/lib/chunking";
+import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 // Get connection config from request headers
 function getConnectionConfig(request: Request): ConnectionConfig | null {
@@ -123,6 +124,12 @@ async function listMongoDBDocuments(
 }
 
 export async function GET(request: Request) {
+    // Apply rate limiting
+    const rateLimitResult = withRateLimit(request, RATE_LIMITS.default);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+        return rateLimitResult.response;
+    }
+
     try {
         const connectionConfig = getConnectionConfig(request);
         const { searchParams } = new URL(request.url);
@@ -165,6 +172,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+    // Apply rate limiting for write operations
+    const rateLimitResult = withRateLimit(request, RATE_LIMITS.write);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+        return rateLimitResult.response;
+    }
+
     const validation = await validateRequestBody(request, addDocumentsSchema);
 
     if (!validation.success) {
@@ -275,6 +288,12 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+    // Apply rate limiting for write operations
+    const rateLimitResult = withRateLimit(request, RATE_LIMITS.write);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+        return rateLimitResult.response;
+    }
+
     const validation = await validateRequestBody(request, deleteDocumentsSchema);
 
     if (!validation.success) {
