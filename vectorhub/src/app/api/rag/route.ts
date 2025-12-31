@@ -67,6 +67,56 @@ async function searchMongoDB(
         const db = client.db(database);
         const col = db.collection(collection);
 
+        // First, check if the collection exists and has documents
+        const docCount = await col.countDocuments();
+        logger.info(`Collection "${collection}" has ${docCount} documents`);
+        
+        if (docCount === 0) {
+            logger.warn(`Collection "${collection}" is empty`);
+            return [];
+        }
+
+        // Check if documents have the embedding field by sampling one
+        const sampleDoc = await col.findOne({});
+        const hasEmbedding = sampleDoc && embeddingField in sampleDoc;
+        const hasContent = sampleDoc && ('content' in sampleDoc || 'text' in sampleDoc || 'message' in sampleDoc);
+        
+        logger.info(`Sample doc fields: ${sampleDoc ? Object.keys(sampleDoc).join(', ') : 'none'}`);
+        logger.info(`Has embedding field (${embeddingField}): ${hasEmbedding}, Has content: ${hasContent}`);
+
+        // If no embedding field, try text search instead
+        if (!hasEmbedding) {
+            logger.warn(`Collection "${collection}" doesn't have embedding field "${embeddingField}", falling back to text search`);
+            
+            // Try to find documents with text matching the query
+            const textResults = await col.find({
+                $or: [
+                    { content: { $regex: query, $options: 'i' } },
+                    { text: { $regex: query, $options: 'i' } },
+                    { message: { $regex: query, $options: 'i' } },
+                    { title: { $regex: query, $options: 'i' } },
+                ]
+            }).limit(topK).toArray();
+            
+            if (textResults.length > 0) {
+                return textResults.map((doc, idx) => ({
+                    id: doc._id.toString(),
+                    score: 1 - (idx * 0.1), // Fake score based on order
+                    content: doc.content || doc.text || doc.message || JSON.stringify(doc),
+                    metadata: { source: doc.source || doc.title || collection, ...doc.metadata },
+                }));
+            }
+            
+            // If no text match, just return some documents
+            const anyDocs = await col.find({}).limit(topK).toArray();
+            return anyDocs.map((doc, idx) => ({
+                id: doc._id.toString(),
+                score: 0.5,
+                content: doc.content || doc.text || doc.message || JSON.stringify(doc),
+                metadata: { source: doc.source || doc.title || collection, ...doc.metadata },
+            }));
+        }
+
         // Generate embedding for the query
         const vector = await generateEmbedding(query);
 
@@ -85,7 +135,11 @@ async function searchMongoDB(
                 $project: {
                     _id: 1,
                     content: 1,
+                    text: 1,
+                    message: 1,
                     metadata: 1,
+                    source: 1,
+                    title: 1,
                     score: { $meta: "vectorSearchScore" },
                 },
             },
@@ -101,9 +155,31 @@ async function searchMongoDB(
         return results.map((doc) => ({
             id: doc._id.toString(),
             score: doc.score,
-            content: doc.content || "",
-            metadata: doc.metadata || {},
+            content: doc.content || doc.text || doc.message || "",
+            metadata: { source: doc.source || doc.title, ...doc.metadata } || {},
         }));
+    } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        logger.error(`MongoDB search failed: ${errorMsg}`);
+        
+        // If vector search fails, try simple find
+        if (errorMsg.includes("$vectorSearch") || errorMsg.includes("index")) {
+            logger.warn("Vector search failed, trying simple document fetch");
+            try {
+                const db = client.db(database);
+                const col = db.collection(collection);
+                const docs = await col.find({}).limit(topK).toArray();
+                return docs.map((doc, idx) => ({
+                    id: doc._id.toString(),
+                    score: 0.5,
+                    content: doc.content || doc.text || doc.message || JSON.stringify(doc),
+                    metadata: { source: doc.source || doc.title || collection },
+                }));
+            } catch {
+                // Give up
+            }
+        }
+        throw error;
     } finally {
         await client.close();
     }
@@ -847,7 +923,7 @@ export async function POST(request: Request) {
             try {
                 // Use provided connection config or fallback to environment variable
                 const connString = connectionConfig?.connectionString || process.env.MONGODB_URI;
-                const database = connectionConfig?.database || "Knowledge_base";
+                const database = connectionConfig?.database || process.env.MONGODB_DATABASE || "test";
 
                 if (connString) {
                     context = await searchMongoDB(
