@@ -29,6 +29,22 @@ import { listWebhookConnections, getWebhookSecret } from "@/lib/webhooks/store";
 
 // MCP Tool definitions following the Model Context Protocol spec
 export const bookingMcpTools = [
+    // Date/Time context tool - CALL THIS FIRST to get current date for scheduling
+    {
+        name: "get_current_datetime",
+        description: `IMPORTANT: Call this FIRST before creating any booking to get the current date and time.
+        
+        Returns the current date, time, timezone, and helpful info for scheduling like:
+        - Current date and time in ISO format
+        - Day of week
+        - Upcoming weekdays with their dates (e.g., "Monday" -> "2025-01-06")
+        
+        Use this to correctly interpret user requests like "Monday at 3pm" or "next Friday".`,
+        inputSchema: {
+            type: "object",
+            properties: {},
+        },
+    },
     // Smart routing tool - helps AI decide between booking and lead
     {
         name: "capture_contact",
@@ -118,7 +134,16 @@ export const bookingMcpTools = [
     },
     {
         name: "booking_create",
-        description: "Create a scheduled booking/appointment with a SPECIFIC DATE AND TIME. Use this when someone wants to book a meeting at a particular time slot. Requires: eventTypeId, startTime, name, email.",
+        description: `Create a scheduled booking/appointment with a SPECIFIC DATE AND TIME.
+        
+        IMPORTANT: Call get_current_datetime FIRST to get the correct date for relative terms like "Monday" or "next week".
+        
+        Use this when someone wants to book a meeting at a particular time slot.
+        Requires: eventTypeId, startTime, guestName, guestEmail.
+        
+        startTime MUST be a valid ISO 8601 datetime string (e.g., "2025-01-06T15:00:00").
+        - For "3pm" use "15:00:00"
+        - For "3am" use "03:00:00"`,
         inputSchema: {
             type: "object",
             properties: {
@@ -438,6 +463,51 @@ export async function handleBookingToolCall(
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
     try {
         switch (toolName) {
+            // Date/Time context tool
+            case "get_current_datetime": {
+                const now = new Date();
+                const settings = await getBookingSettings();
+                
+                // Get upcoming weekdays with their dates
+                const upcomingDays: Record<string, string> = {};
+                const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                
+                for (let i = 0; i < 14; i++) {
+                    const futureDate = new Date(now);
+                    futureDate.setDate(now.getDate() + i);
+                    const dayName = dayNames[futureDate.getDay()];
+                    const dateStr = futureDate.toISOString().split('T')[0];
+                    
+                    // Only add if not already present (first occurrence)
+                    if (!upcomingDays[dayName]) {
+                        upcomingDays[dayName] = dateStr;
+                    }
+                    // Also add "next Monday", "next Tuesday" etc for the second week
+                    if (i >= 7 && !upcomingDays[`next ${dayName}`]) {
+                        upcomingDays[`next ${dayName}`] = dateStr;
+                    }
+                }
+                
+                // Add common relative terms
+                const tomorrow = new Date(now);
+                tomorrow.setDate(now.getDate() + 1);
+                upcomingDays["tomorrow"] = tomorrow.toISOString().split('T')[0];
+                upcomingDays["today"] = now.toISOString().split('T')[0];
+                
+                return {
+                    success: true,
+                    data: {
+                        currentDateTime: now.toISOString(),
+                        currentDate: now.toISOString().split('T')[0],
+                        currentTime: now.toTimeString().split(' ')[0],
+                        dayOfWeek: dayNames[now.getDay()],
+                        timezone: settings.timezone,
+                        upcomingDays,
+                        tip: "Use upcomingDays to convert 'Monday' or 'next Friday' to actual dates. Combine date with time like: '2025-01-06T15:00:00' for 3pm on Jan 6th.",
+                    }
+                };
+            }
+
             // Smart routing tool
             case "capture_contact": {
                 const requestType = args.requestType as string || "auto";
