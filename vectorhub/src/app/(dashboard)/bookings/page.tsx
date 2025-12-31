@@ -335,7 +335,7 @@ export default function BookingsPage() {
                                             </div>
                                         </div>
                                         <div className="ml-4">
-                                            <Button variant="ghost" size="icon" onClick={() => handleMoreOptions(booking.name)}>
+                                            <Button variant="ghost" size="icon" onClick={() => handleMoreOptions(booking.guestName)}>
                                                 <MoreVertical className="h-4 w-4" />
                                             </Button>
                                         </div>
