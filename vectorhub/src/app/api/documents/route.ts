@@ -186,8 +186,9 @@ export async function POST(request: Request) {
 
     const { collection, documents, chunkSize, chunkOverlap } = validation.data;
 
-    const customChunkSize = chunkSize || 1000;
-    const customChunkOverlap = chunkOverlap || 200;
+    // Always use chunking with sensible defaults
+    const customChunkSize = chunkSize ?? 1000;
+    const customChunkOverlap = chunkOverlap ?? 200;
 
     try {
         const connectionConfig = getConnectionConfig(request);
@@ -198,19 +199,21 @@ export async function POST(request: Request) {
         for (const doc of documents) {
             if (!doc.content) continue;
 
-            // Split text into chunks only if chunkSize is provided
-            let chunks: string[] = [];
-            if (chunkSize) {
-                chunks = splitText(doc.content, customChunkSize, customChunkOverlap);
-            } else {
-                // If no chunking options provided, treat as single chunk
-                chunks = [doc.content];
-            }
+            // Split text into chunks
+            const chunks = splitText(doc.content, customChunkSize, customChunkOverlap);
 
             // If splitting returned empty (shouldn't happen if content exists, but safe fallback)
             if (chunks.length === 0) {
                 chunks.push(doc.content);
             }
+
+            logger.info("Processing document", { 
+                docId: doc.id, 
+                contentLength: doc.content.length, 
+                chunkCount: chunks.length,
+                chunkSize: customChunkSize,
+                chunkOverlap: customChunkOverlap
+            });
 
             // Process each chunk
             for (let i = 0; i < chunks.length; i++) {
