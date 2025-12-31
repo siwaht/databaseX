@@ -238,25 +238,25 @@ export default function BookingsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Booking Management</h1>
-                    <p className="text-muted-foreground">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Booking Management</h1>
+                    <p className="text-muted-foreground text-sm sm:text-base">
                         Manage your event types, availability, and scheduled bookings.
                     </p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleSettings}>
+                <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={handleSettings}>
                         <Settings2 className="mr-2 h-4 w-4" />
-                        Settings
+                        <span className="hidden sm:inline">Settings</span>
                     </Button>
-                    <Button variant="outline" onClick={handleExport}>
+                    <Button variant="outline" size="sm" onClick={handleExport}>
                         <Download className="mr-2 h-4 w-4" />
-                        Export
+                        <span className="hidden sm:inline">Export</span>
                     </Button>
-                    <Button variant="outline" onClick={handleImportClick}>
+                    <Button variant="outline" size="sm" onClick={handleImportClick}>
                         <Upload className="mr-2 h-4 w-4" />
-                        Import
+                        <span className="hidden sm:inline">Import</span>
                     </Button>
                     <input
                         type="file"
@@ -265,19 +265,20 @@ export default function BookingsPage() {
                         accept=".json"
                         onChange={handleFileChange}
                     />
-                    <Button onClick={handleNewEvent}>
+                    <Button size="sm" onClick={handleNewEvent}>
                         <Plus className="mr-2 h-4 w-4" />
-                        New Event Type
+                        <span className="hidden sm:inline">New Event Type</span>
+                        <span className="sm:hidden">New</span>
                     </Button>
                 </div>
             </div>
 
             <Tabs defaultValue="bookings" className="w-full" onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
-                    <TabsTrigger value="bookings">Bookings</TabsTrigger>
-                    <TabsTrigger value="events">Event Types</TabsTrigger>
-                    <TabsTrigger value="availability">Availability</TabsTrigger>
-                    <TabsTrigger value="integrations">Integrations</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-4 lg:w-[500px] h-auto">
+                    <TabsTrigger value="bookings" className="text-xs sm:text-sm py-2">Bookings</TabsTrigger>
+                    <TabsTrigger value="events" className="text-xs sm:text-sm py-2">Events</TabsTrigger>
+                    <TabsTrigger value="availability" className="text-xs sm:text-sm py-2">Hours</TabsTrigger>
+                    <TabsTrigger value="integrations" className="text-xs sm:text-sm py-2">Integrations</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="bookings" className="space-y-4">
@@ -335,7 +336,7 @@ export default function BookingsPage() {
                 </TabsContent>
 
                 <TabsContent value="events" className="space-y-4">
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {events.map((event) => (
                             <Card key={event.id} className="group relative overflow-hidden transition-all hover:shadow-md">
                                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${event.color}`} />
@@ -392,19 +393,19 @@ export default function BookingsPage() {
                                 Set your default weekly working hours.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
+                        <CardContent className="space-y-4 sm:space-y-6">
                             {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, i) => (
-                                <div key={day} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-24 font-medium">{day}</div>
+                                <div key={day} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 border-b pb-4 last:border-0 last:pb-0">
+                                    <div className="flex items-center justify-between sm:justify-start gap-4">
+                                        <div className="w-20 sm:w-24 font-medium text-sm sm:text-base">{day}</div>
                                         {availability[day] ? (
                                             <div className="flex items-center gap-2">
-                                                <Badge>{availability[day]?.start}</Badge>
+                                                <Badge className="text-xs">{availability[day]?.start}</Badge>
                                                 <span className="text-muted-foreground">-</span>
-                                                <Badge>{availability[day]?.end}</Badge>
+                                                <Badge className="text-xs">{availability[day]?.end}</Badge>
                                             </div>
                                         ) : (
-                                            <span className="text-sm text-muted-foreground italic">Unavailable</span>
+                                            <span className="text-xs sm:text-sm text-muted-foreground italic">Unavailable</span>
                                         )}
                                     </div>
                                     <Button variant="ghost" size="sm" onClick={() => handleEditAvailability(day)}>Edit</Button>

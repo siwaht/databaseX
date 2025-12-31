@@ -260,7 +260,7 @@ export default function SearchPage() {
                 </p>
             </motion.div>
 
-            <div className="grid gap-6 lg:grid-cols-[350px_1fr]">
+            <div className="grid gap-6 lg:grid-cols-[300px_1fr] xl:grid-cols-[350px_1fr]">
                 {/* Configuration Panel */}
                 <motion.div variants={itemVariants} className="space-y-4">
                     {/* Collection Selector */}

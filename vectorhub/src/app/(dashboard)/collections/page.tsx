@@ -194,16 +194,16 @@ export default function CollectionsPage() {
             >
                 <motion.div
                     variants={itemVariants}
-                    className="flex items-center justify-between"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                     <div>
-                        <h2 className="text-3xl font-bold tracking-tight">Collections</h2>
-                        <p className="text-muted-foreground">
+                        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Collections</h2>
+                        <p className="text-muted-foreground text-sm sm:text-base">
                             Retrieve and connect to existing collections from your databases.
                         </p>
                     </div>
-                    <div className="flex items-center gap-4">
-                        <div className="w-[200px]">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+                        <div className="w-full sm:w-[200px]">
                             <Select
                                 value={activeConnectionId || ""}
                                 onValueChange={(value) => setActiveConnection(value || null)}

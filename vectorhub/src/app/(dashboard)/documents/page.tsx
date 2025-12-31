@@ -218,19 +218,19 @@ export default function DocumentsPage() {
                 initial="hidden"
                 animate="visible"
             >
-                <motion.div variants={itemVariants} className="flex items-center justify-between">
+                <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h2 className="text-3xl font-bold tracking-tight">Documents</h2>
-                        <p className="text-muted-foreground">
+                        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Documents</h2>
+                        <p className="text-muted-foreground text-sm sm:text-base">
                             View and manage your uploaded documents and vectors.
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <Select
                             value={activeConnectionId || ""}
                             onValueChange={(value) => setActiveConnection(value || null)}
                         >
-                            <SelectTrigger className="w-[180px]">
+                            <SelectTrigger className="w-full sm:w-[180px]">
                                 <Database className="mr-2 h-4 w-4" />
                                 <SelectValue placeholder="Select connection" />
                             </SelectTrigger>

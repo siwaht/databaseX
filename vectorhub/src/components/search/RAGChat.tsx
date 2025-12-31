@@ -328,7 +328,7 @@ export function RAGChat({
     };
 
     return (
-        <div className="flex flex-col h-[600px] border rounded-lg bg-card">
+        <div className="flex flex-col h-[500px] sm:h-[600px] border rounded-lg bg-card">
             {/* Header with agent selector */}
             <div className="flex items-center justify-between p-4 border-b">
                 <div className="flex items-center gap-3">
