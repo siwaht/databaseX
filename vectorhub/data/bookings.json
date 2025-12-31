@@ -7,7 +7,7 @@
     "endTime": "2024-06-10T17:00:00.000Z",
     "guestName": "mac",
     "guestEmail": "tiara@example.com",
-    "status": "confirmed",
+    "status": "cancelled",
     "createdAt": "2025-12-31T07:45:44.107Z",
     "sessionId": "283751ac0d664671b3172f339f65e100",
     "action": "sendMessage",
