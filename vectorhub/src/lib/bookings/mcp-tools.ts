@@ -13,6 +13,7 @@ import {
     updateEventType,
     deleteEventType,
     getBookingSettings,
+    saveBookingSettings,
 } from "./store";
 import {
     listLeads,
@@ -22,7 +23,7 @@ import {
     getLead,
     getLeadStats,
 } from "@/lib/leads/store";
-import { Booking, EventType, BookingStatus, Lead, LeadStatus } from "@/types/booking";
+import { Booking, EventType, BookingStatus, Lead, LeadStatus, CustomField, CustomFieldValue } from "@/types/booking";
 import { broadcastWebhook } from "@/lib/webhooks/delivery";
 import { listWebhookConnections, getWebhookSecret } from "@/lib/webhooks/store";
 
@@ -129,6 +130,11 @@ export const bookingMcpTools = [
                 guestPhone: { type: "string", description: "Guest's phone number" },
                 notes: { type: "string", description: "Notes about the booking" },
                 agenda: { type: "string", description: "Meeting agenda or topics to discuss" },
+                customFields: { 
+                    type: "object",
+                    description: "Custom field values as key-value pairs (e.g., {\"budget\": \"10000\", \"company_size\": \"50-100\"})",
+                    additionalProperties: true
+                },
             },
             required: ["eventTypeId", "startTime", "guestName", "guestEmail"],
         },
@@ -262,6 +268,11 @@ export const bookingMcpTools = [
                     items: { type: "string" },
                     description: "Tags to categorize (e.g., ['enterprise', 'demo-request'])"
                 },
+                customFields: { 
+                    type: "object",
+                    description: "Custom field values as key-value pairs (e.g., {\"budget\": \"10000\", \"industry\": \"healthcare\"})",
+                    additionalProperties: true
+                },
             },
             required: ["name", "email"],
         },
@@ -331,6 +342,69 @@ export const bookingMcpTools = [
         inputSchema: {
             type: "object",
             properties: {},
+        },
+    },
+    // Custom Fields Management
+    {
+        name: "custom_fields_get",
+        description: "Get the custom fields configured for leads or a specific event type",
+        inputSchema: {
+            type: "object",
+            properties: {
+                type: {
+                    type: "string",
+                    enum: ["lead", "event"],
+                    description: "Get custom fields for leads or events"
+                },
+                eventTypeId: {
+                    type: "string",
+                    description: "Event type ID (required if type is 'event')"
+                },
+            },
+            required: ["type"],
+        },
+    },
+    {
+        name: "custom_fields_set",
+        description: "Configure custom fields to capture for leads or a specific event type",
+        inputSchema: {
+            type: "object",
+            properties: {
+                type: {
+                    type: "string",
+                    enum: ["lead", "event"],
+                    description: "Set custom fields for leads or events"
+                },
+                eventTypeId: {
+                    type: "string",
+                    description: "Event type ID (required if type is 'event')"
+                },
+                fields: {
+                    type: "array",
+                    description: "Array of custom field definitions",
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string", description: "Field name (used as key)" },
+                            label: { type: "string", description: "Display label" },
+                            type: { 
+                                type: "string", 
+                                enum: ["text", "textarea", "number", "email", "phone", "select", "multiselect", "checkbox", "date"],
+                                description: "Field type"
+                            },
+                            required: { type: "boolean", description: "Is this field required?" },
+                            placeholder: { type: "string", description: "Placeholder text" },
+                            options: { 
+                                type: "array", 
+                                items: { type: "string" },
+                                description: "Options for select/multiselect fields"
+                            },
+                        },
+                        required: ["name", "label", "type"],
+                    },
+                },
+            },
+            required: ["type", "fields"],
         },
     },
 ];
@@ -465,6 +539,16 @@ export async function handleBookingToolCall(
                 // Accept both 'notes' and 'guestNotes' for flexibility
                 const bookingNotes = (args.notes as string) || (args.guestNotes as string) || undefined;
 
+                // Process custom fields
+                let customFieldValues: CustomFieldValue[] | undefined;
+                if (args.customFields && typeof args.customFields === 'object') {
+                    customFieldValues = Object.entries(args.customFields as Record<string, unknown>).map(([key, value]) => ({
+                        fieldId: key,
+                        fieldName: key,
+                        value: value as string | string[] | boolean | number,
+                    }));
+                }
+
                 const newBooking: Booking = {
                     id: crypto.randomUUID(),
                     eventTypeId: args.eventTypeId as string,
@@ -473,10 +557,12 @@ export async function handleBookingToolCall(
                     endTime: endTime,
                     guestName: args.guestName as string,
                     guestEmail: args.guestEmail as string,
+                    guestPhone: args.guestPhone as string | undefined,
                     guestNotes: bookingNotes,
                     agenda: args.agenda as string | undefined,
                     status: "confirmed",
                     createdAt: new Date().toISOString(),
+                    customFields: customFieldValues,
                 };
 
                 const created = await createBooking(newBooking);
@@ -616,6 +702,16 @@ export async function handleBookingToolCall(
 
             // Lead Capture Tools
             case "lead_create": {
+                // Process custom fields
+                let customFieldValues: CustomFieldValue[] | undefined;
+                if (args.customFields && typeof args.customFields === 'object') {
+                    customFieldValues = Object.entries(args.customFields as Record<string, unknown>).map(([key, value]) => ({
+                        fieldId: key,
+                        fieldName: key,
+                        value: value as string | string[] | boolean | number,
+                    }));
+                }
+
                 const newLead: Lead = {
                     id: crypto.randomUUID(),
                     name: args.name as string,
@@ -630,6 +726,7 @@ export async function handleBookingToolCall(
                     preferredContactMethod: args.preferredContactMethod as Lead["preferredContactMethod"],
                     preferredCallbackTime: args.preferredCallbackTime as string | undefined,
                     tags: args.tags as string[] | undefined,
+                    customFields: customFieldValues,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
                 };
@@ -690,6 +787,97 @@ export async function handleBookingToolCall(
             case "lead_stats": {
                 const stats = await getLeadStats();
                 return { success: true, data: stats };
+            }
+
+            // Custom Fields Management
+            case "custom_fields_get": {
+                const fieldType = args.type as string;
+                
+                if (fieldType === "lead") {
+                    const settings = await getBookingSettings();
+                    return { 
+                        success: true, 
+                        data: {
+                            type: "lead",
+                            fields: settings.leadCustomFields || [],
+                        }
+                    };
+                } else if (fieldType === "event") {
+                    if (!args.eventTypeId) {
+                        return { success: false, error: "eventTypeId is required for event custom fields" };
+                    }
+                    const eventTypes = await listEventTypes();
+                    const eventType = eventTypes.find(e => e.id === args.eventTypeId);
+                    if (!eventType) {
+                        return { success: false, error: `Event type not found: ${args.eventTypeId}` };
+                    }
+                    return {
+                        success: true,
+                        data: {
+                            type: "event",
+                            eventTypeId: eventType.id,
+                            eventTypeName: eventType.name,
+                            fields: eventType.customFields || [],
+                        }
+                    };
+                }
+                return { success: false, error: "Invalid type. Use 'lead' or 'event'" };
+            }
+
+            case "custom_fields_set": {
+                const fieldType = args.type as string;
+                const fields = (args.fields as CustomField[]) || [];
+                
+                // Validate and normalize fields
+                const normalizedFields: CustomField[] = fields.map((f, i) => ({
+                    id: f.id || `field_${i}_${Date.now()}`,
+                    name: f.name,
+                    label: f.label,
+                    type: f.type,
+                    required: f.required || false,
+                    placeholder: f.placeholder,
+                    options: f.options,
+                    defaultValue: f.defaultValue,
+                }));
+
+                if (fieldType === "lead") {
+                    const settings = await getBookingSettings();
+                    const updatedSettings = {
+                        ...settings,
+                        leadCustomFields: normalizedFields,
+                    };
+                    // Save settings (you'll need to implement saveBookingSettings)
+                    await saveBookingSettings(updatedSettings);
+                    return {
+                        success: true,
+                        data: {
+                            type: "lead",
+                            fields: normalizedFields,
+                            message: `${normalizedFields.length} custom fields configured for leads`,
+                        }
+                    };
+                } else if (fieldType === "event") {
+                    if (!args.eventTypeId) {
+                        return { success: false, error: "eventTypeId is required for event custom fields" };
+                    }
+                    const updated = await updateEventType(args.eventTypeId as string, {
+                        customFields: normalizedFields,
+                    });
+                    if (!updated) {
+                        return { success: false, error: `Event type not found: ${args.eventTypeId}` };
+                    }
+                    return {
+                        success: true,
+                        data: {
+                            type: "event",
+                            eventTypeId: updated.id,
+                            eventTypeName: updated.name,
+                            fields: normalizedFields,
+                            message: `${normalizedFields.length} custom fields configured for ${updated.name}`,
+                        }
+                    };
+                }
+                return { success: false, error: "Invalid type. Use 'lead' or 'event'" };
             }
 
             default:

@@ -71,7 +71,7 @@ import { EventEditorDialog } from "@/components/bookings/EventEditorDialog";
 import { BookingSettingsDialog } from "@/components/bookings/BookingSettingsDialog";
 import { BookingIntegrationDialog } from "@/components/bookings/BookingIntegrationDialog";
 import { AvailabilityDialog } from "@/components/bookings/AvailabilityDialog";
-import { EventType, Lead } from "@/types/booking";
+import { EventType, Lead, CustomFieldValue } from "@/types/booking";
 
 
 import { useEffect } from "react";
