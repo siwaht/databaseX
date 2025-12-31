@@ -3,11 +3,16 @@
     "id": "13bffade-9dc0-44d6-83b1-a29e2d483a0b",
     "eventTypeId": "7e8547fd-3e69-4948-a17b-68fcf80c9385",
     "eventTypeName": "Dental Drilling",
-    "startTime": "2024-06-10T16:00:00",
+    "startTime": "2024-06-10T17:00:00",
     "endTime": "2024-06-10T17:00:00.000Z",
-    "guestName": "tiara",
+    "guestName": "mac",
     "guestEmail": "tiara@example.com",
     "status": "confirmed",
-    "createdAt": "2025-12-31T07:45:44.107Z"
+    "createdAt": "2025-12-31T07:45:44.107Z",
+    "sessionId": "283751ac0d664671b3172f339f65e100",
+    "action": "sendMessage",
+    "chatInput": "update the time to 5 and change the name to mac, also mention note that i like sweets",
+    "guestNotes": "I like sweets",
+    "toolCallId": "call_b7VTkl2be6QtiBqyNDPpwhJN"
   }
 ]
