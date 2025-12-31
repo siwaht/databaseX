@@ -407,6 +407,28 @@ export const bookingMcpTools = [
             required: ["type", "fields"],
         },
     },
+    {
+        name: "get_capture_requirements",
+        description: `Get the required and optional fields that should be captured when creating a lead or booking. 
+        
+        IMPORTANT: Call this BEFORE creating a lead or booking to know what information to collect from the user.
+        Returns both standard fields and any custom fields that have been configured.`,
+        inputSchema: {
+            type: "object",
+            properties: {
+                type: {
+                    type: "string",
+                    enum: ["lead", "booking"],
+                    description: "What type of capture - lead (callback/inquiry) or booking (scheduled appointment)"
+                },
+                eventTypeId: {
+                    type: "string",
+                    description: "Event type ID (optional, for booking-specific custom fields)"
+                },
+            },
+            required: ["type"],
+        },
+    },
 ];
 
 // Tool handler implementations
@@ -878,6 +900,81 @@ export async function handleBookingToolCall(
                     };
                 }
                 return { success: false, error: "Invalid type. Use 'lead' or 'event'" };
+            }
+
+            case "get_capture_requirements": {
+                const captureType = args.type as string;
+                const settings = await getBookingSettings();
+                
+                if (captureType === "lead") {
+                    // Standard lead fields
+                    const standardFields = [
+                        { name: "name", label: "Full Name", type: "text", required: true },
+                        { name: "email", label: "Email Address", type: "email", required: true },
+                        { name: "phone", label: "Phone Number", type: "phone", required: false },
+                        { name: "company", label: "Company", type: "text", required: false },
+                        { name: "interestedIn", label: "Interested In", type: "text", required: false },
+                        { name: "preferredContactMethod", label: "Preferred Contact Method", type: "select", required: false, options: ["email", "phone", "callback"] },
+                        { name: "preferredCallbackTime", label: "Preferred Callback Time", type: "text", required: false },
+                        { name: "notes", label: "Notes/Questions", type: "textarea", required: false },
+                    ];
+                    
+                    // Get configured custom fields for leads
+                    const customFields = settings.leadCustomFields || [];
+                    
+                    return {
+                        success: true,
+                        data: {
+                            type: "lead",
+                            description: "Lead capture for callbacks and inquiries (no specific appointment time)",
+                            standardFields,
+                            customFields,
+                            requiredFields: standardFields.filter(f => f.required).map(f => f.name),
+                            allFields: [...standardFields, ...customFields],
+                        }
+                    };
+                } else if (captureType === "booking") {
+                    // Standard booking fields
+                    const standardFields = [
+                        { name: "eventTypeId", label: "Event Type", type: "select", required: true, description: "Get from event_types_list" },
+                        { name: "startTime", label: "Start Time", type: "date", required: true, description: "ISO format datetime" },
+                        { name: "guestName", label: "Guest Name", type: "text", required: true },
+                        { name: "guestEmail", label: "Guest Email", type: "email", required: true },
+                        { name: "guestPhone", label: "Guest Phone", type: "phone", required: false },
+                        { name: "notes", label: "Notes", type: "textarea", required: false },
+                        { name: "agenda", label: "Meeting Agenda", type: "textarea", required: false },
+                    ];
+                    
+                    // If eventTypeId provided, get custom fields for that event type
+                    let customFields: CustomField[] = [];
+                    let eventTypeName = "";
+                    
+                    if (args.eventTypeId) {
+                        const eventTypes = await listEventTypes();
+                        const eventType = eventTypes.find(e => e.id === args.eventTypeId);
+                        if (eventType) {
+                            customFields = eventType.customFields || [];
+                            eventTypeName = eventType.name;
+                        }
+                    }
+                    
+                    return {
+                        success: true,
+                        data: {
+                            type: "booking",
+                            description: "Scheduled appointment with specific date and time",
+                            eventTypeId: args.eventTypeId || null,
+                            eventTypeName: eventTypeName || null,
+                            standardFields,
+                            customFields,
+                            requiredFields: standardFields.filter(f => f.required).map(f => f.name),
+                            allFields: [...standardFields, ...customFields],
+                            tip: "Use event_types_list to get available event types, then availability_check to find open slots",
+                        }
+                    };
+                }
+                
+                return { success: false, error: "Invalid type. Use 'lead' or 'booking'" };
             }
 
             default:
