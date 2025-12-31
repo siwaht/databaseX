@@ -11,7 +11,6 @@ import {
     listEventTypes,
     createEventType,
     updateEventType,
-    deleteEventType,
     getBookingSettings,
     saveBookingSettings,
 } from "./store";
@@ -19,11 +18,10 @@ import {
     listLeads,
     createLead,
     updateLead,
-    deleteLead,
     getLead,
     getLeadStats,
 } from "@/lib/leads/store";
-import { Booking, EventType, BookingStatus, Lead, LeadStatus, CustomField, CustomFieldValue } from "@/types/booking";
+import { Booking, EventType, BookingStatus, Lead, CustomField, CustomFieldValue } from "@/types/booking";
 import { broadcastWebhook } from "@/lib/webhooks/delivery";
 import { listWebhookConnections, getWebhookSecret } from "@/lib/webhooks/store";
 
@@ -1222,7 +1220,10 @@ export async function handleBookingToolCall(
     }
 }
 
-// Helper to generate available time slots
+// Import shared utility for time slot generation
+import { generateTimeSlots as generateTimeSlotsUtil } from "./utils";
+
+// Helper to generate available time slots (wrapper around shared utility)
 function generateTimeSlots(
     startTime: string,
     endTime: string,
@@ -1230,40 +1231,18 @@ function generateTimeSlots(
     existingBookings: Booking[],
     date: Date
 ): { start: string; end: string }[] {
-    const slots: { start: string; end: string }[] = [];
-    const [startHour, startMin] = startTime.split(":").map(Number);
-    const [endHour, endMin] = endTime.split(":").map(Number);
-
-    const current = new Date(date);
-    current.setHours(startHour, startMin, 0, 0);
-
-    const endDate = new Date(date);
-    endDate.setHours(endHour, endMin, 0, 0);
-
-    while (current < endDate) {
-        const slotEnd = new Date(current);
-        slotEnd.setMinutes(slotEnd.getMinutes() + duration);
-
-        if (slotEnd > endDate) break;
-
-        // Check if slot conflicts with existing bookings
-        const hasConflict = existingBookings.some((booking) => {
+    const slots = generateTimeSlotsUtil(startTime, endTime, duration, existingBookings, date, false);
+    // Filter to only available slots (no conflicts)
+    return slots.filter((_, idx) => {
+        const slot = slots[idx];
+        const slotStart = new Date(slot.start);
+        const slotEnd = new Date(slot.end);
+        return !existingBookings.some((booking) => {
             const bookingStart = new Date(booking.startTime);
             const bookingEnd = new Date(booking.endTime);
-            return current < bookingEnd && slotEnd > bookingStart;
+            return slotStart < bookingEnd && slotEnd > bookingStart;
         });
-
-        if (!hasConflict) {
-            slots.push({
-                start: current.toISOString(),
-                end: slotEnd.toISOString(),
-            });
-        }
-
-        current.setMinutes(current.getMinutes() + duration);
-    }
-
-    return slots;
+    });
 }
 
 // Helper to broadcast booking events to webhooks

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { logger } from "@/lib/logger";
 import { listBookings, listEventTypes, getBookingSettings } from "@/lib/bookings/store";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { generateTimeSlots } from "@/lib/bookings/utils";
 
 const availabilitySchema = z.object({
     eventTypeId: z.string().min(1, "Event type ID is required"),
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
             return bookingDate === params.date && b.status !== "cancelled";
         });
 
-        // Generate time slots
+        // Generate time slots using shared utility
         const slots = generateTimeSlots(
             dayAvailability.start,
             dayAvailability.end,
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
                 duration: eventType.duration,
                 color: eventType.color,
             },
-            available: !isPast && slots.length > 0,
+            available: !isPast && slots.some(s => s.available),
             isPast,
             workingHours: {
                 start: dayAvailability.start,
@@ -118,56 +119,4 @@ export async function GET(request: Request) {
             { status: 500 }
         );
     }
-}
-
-interface Booking {
-    startTime: string;
-    endTime: string;
-}
-
-function generateTimeSlots(
-    startTime: string,
-    endTime: string,
-    duration: number,
-    existingBookings: Booking[],
-    date: Date
-): { start: string; end: string; available: boolean }[] {
-    const slots: { start: string; end: string; available: boolean }[] = [];
-    const [startHour, startMin] = startTime.split(":").map(Number);
-    const [endHour, endMin] = endTime.split(":").map(Number);
-
-    const current = new Date(date);
-    current.setHours(startHour, startMin, 0, 0);
-
-    const endDate = new Date(date);
-    endDate.setHours(endHour, endMin, 0, 0);
-
-    const now = new Date();
-
-    while (current < endDate) {
-        const slotEnd = new Date(current);
-        slotEnd.setMinutes(slotEnd.getMinutes() + duration);
-
-        if (slotEnd > endDate) break;
-
-        // Check if slot is in the past
-        const isPast = current < now;
-
-        // Check if slot conflicts with existing bookings
-        const hasConflict = existingBookings.some((booking) => {
-            const bookingStart = new Date(booking.startTime);
-            const bookingEnd = new Date(booking.endTime);
-            return current < bookingEnd && slotEnd > bookingStart;
-        });
-
-        slots.push({
-            start: current.toISOString(),
-            end: slotEnd.toISOString(),
-            available: !isPast && !hasConflict,
-        });
-
-        current.setMinutes(current.getMinutes() + duration);
-    }
-
-    return slots;
 }
