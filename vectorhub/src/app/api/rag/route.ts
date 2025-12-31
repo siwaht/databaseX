@@ -130,6 +130,13 @@ async function generateAIResponse(
     agentName?: string,
     history?: { role: string; content: string }[]
 ): Promise<string> {
+    // Check if OpenAI is configured
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+    if (!apiKey) {
+        logger.warn("OpenAI API key not configured, using fallback response");
+        return generateFallbackResponse(query, context, agentName, history);
+    }
+
     try {
         // Build context string from retrieved documents
         let contextStr = "";

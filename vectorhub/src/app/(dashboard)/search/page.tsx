@@ -185,8 +185,12 @@ export default function SearchPage() {
                 embeddingField: config.embeddingField,
             };
         }
+        // Return undefined - the API will fall back to environment variables
         return undefined;
     }, [connections]);
+
+    // Check if MongoDB is configured (either via connection or env vars will be checked server-side)
+    const hasMongoDBConnection = connections.some((c) => c.type === "mongodb_atlas");
 
     const handleSendMessage = useCallback(
         async (
