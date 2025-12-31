@@ -199,10 +199,10 @@ export default function IntegrationsPage() {
 
     const getProvidersList = (type: ApiKey["type"]) => {
         switch (type) {
-            case "llm": return llmProviders;
-            case "scraper": return scraperProviders;
-            case "embedding": return embeddingProviders;
-            default: return [];
+            case "llm": return [...llmProviders, { value: "custom", label: "Custom LLM", placeholder: "..." }];
+            case "scraper": return [...scraperProviders, { value: "custom", label: "Custom Scraper", placeholder: "..." }];
+            case "embedding": return [...embeddingProviders, { value: "custom", label: "Custom Embedding", placeholder: "..." }];
+            default: return [{ value: "custom", label: "Custom", placeholder: "..." }];
         }
     };
 
@@ -655,9 +655,6 @@ export default function IntegrationsPage() {
                                                                 {p.label}
                                                             </SelectItem>
                                                         ))}
-                                                        {newKeyType === "other" && (
-                                                            <SelectItem value="custom">Custom</SelectItem>
-                                                        )}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
