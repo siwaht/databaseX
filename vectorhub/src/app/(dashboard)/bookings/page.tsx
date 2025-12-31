@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Webhook, RadioTower, ExternalLink } from "lucide-react";
+import { Webhook, RadioTower } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { EventEditorDialog } from "@/components/bookings/EventEditorDialog";
 import { BookingSettingsDialog } from "@/components/bookings/BookingSettingsDialog";
@@ -35,7 +35,7 @@ import { useEffect } from "react";
 // ... imports ...
 
 export default function BookingsPage() {
-    const [activeTab, setActiveTab] = useState("bookings");
+    const [, setActiveTab] = useState("bookings");
     const [events, setEvents] = useState<EventType[]>([]);
     const [integrations, setIntegrations] = useState<any[]>([]);
     const [bookings, setBookings] = useState<any[]>([]);
@@ -427,63 +427,114 @@ export default function BookingsPage() {
                 </TabsContent>
 
                 <TabsContent value="integrations" className="space-y-6">
-                    {/* ... (integrations content) ... */}
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h3 className="text-lg font-medium">Active Integrations</h3>
-                            <p className="text-sm text-muted-foreground">
-                                Connect your booking flow to external tools.
-                            </p>
-                        </div>
-                        <Button onClick={handleNewIntegration}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Connection
-                        </Button>
-                    </div>
-
-                    <div className="grid gap-4">
-                        {integrations.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-lg border-muted">
-                                <div className="p-3 rounded-full bg-muted/50 mb-4">
-                                    <ExternalLink className="h-6 w-6 text-muted-foreground" />
+                    {/* MCP Server Section */}
+                    <Card className="border-purple-500/20 bg-gradient-to-br from-purple-500/5 to-transparent">
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                                        <RadioTower className="h-5 w-5 text-purple-500" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-base">MCP Server for AI Agents</CardTitle>
+                                        <CardDescription>
+                                            Let AI assistants manage bookings automatically
+                                        </CardDescription>
+                                    </div>
                                 </div>
-                                <h3 className="text-lg font-medium">No integrations yet</h3>
-                                <p className="text-sm text-muted-foreground max-w-sm mt-1">
-                                    Add a webhook or MCP server to automate your workflow when a booking happens.
+                                <Badge className="bg-green-500/15 text-green-700 border-green-200">
+                                    Active
+                                </Badge>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
+                                <code className="flex-1 text-sm font-mono truncate">
+                                    {typeof window !== 'undefined' ? `${window.location.origin}/api/bookings/mcp` : '/api/bookings/mcp'}
+                                </code>
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(`${window.location.origin}/api/bookings/mcp`);
+                                        toast.success("MCP endpoint copied!");
+                                    }}
+                                >
+                                    Copy
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <Badge variant="outline" className="text-xs">booking_list</Badge>
+                                <Badge variant="outline" className="text-xs">booking_create</Badge>
+                                <Badge variant="outline" className="text-xs">booking_update</Badge>
+                                <Badge variant="outline" className="text-xs">booking_cancel</Badge>
+                                <Badge variant="outline" className="text-xs">availability_check</Badge>
+                                <Badge variant="outline" className="text-xs">+4 more</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                AI agents can use this endpoint to list, create, update, and cancel bookings via the Model Context Protocol.
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Webhooks Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-medium flex items-center gap-2">
+                                    <Webhook className="h-5 w-5 text-blue-500" />
+                                    Webhook Integrations
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Send booking events to external services like Slack, Zapier, or your own server.
                                 </p>
                             </div>
-                        ) : (
-                            integrations.map((integration) => (
-                                <Card key={integration.id}>
-                                    <div className="flex items-center p-4 gap-4">
-                                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            {integration.type === 'webhook' ? (
-                                                <Webhook className="h-5 w-5 text-primary" />
-                                            ) : (
-                                                <RadioTower className="h-5 w-5 text-primary" />
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <h4 className="font-medium">{integration.name}</h4>
-                                                <Badge variant="secondary" className="text-xs uppercase">
-                                                    {integration.type}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-sm text-muted-foreground truncate max-w-md">
-                                                {integration.config.url}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-200">
-                                                Active
-                                            </Badge>
-                                            <Button variant="ghost" size="sm" onClick={() => handleConfigure(integration)}>Configure</Button>
-                                        </div>
+                            <Button onClick={handleNewIntegration}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Webhook
+                            </Button>
+                        </div>
+
+                        <div className="grid gap-3">
+                            {integrations.filter(i => i.type === 'webhook').length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed rounded-lg border-muted">
+                                    <div className="p-3 rounded-full bg-muted/50 mb-3">
+                                        <Webhook className="h-5 w-5 text-muted-foreground" />
                                     </div>
-                                </Card>
-                            ))
-                        )}
+                                    <h4 className="font-medium">No webhooks configured</h4>
+                                    <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                                        Add a webhook to get notified when bookings are created or cancelled.
+                                    </p>
+                                    <Button variant="outline" size="sm" className="mt-3" onClick={handleNewIntegration}>
+                                        Add Webhook
+                                    </Button>
+                                </div>
+                            ) : (
+                                integrations.filter(i => i.type === 'webhook').map((integration) => (
+                                    <Card key={integration.id}>
+                                        <div className="flex items-center p-4 gap-4">
+                                            <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                                <Webhook className="h-5 w-5 text-blue-500" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-medium">{integration.name}</h4>
+                                                <p className="text-sm text-muted-foreground truncate">
+                                                    {integration.config?.url}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge className="bg-green-500/15 text-green-700 border-green-200">
+                                                    Active
+                                                </Badge>
+                                                <Button variant="ghost" size="sm" onClick={() => handleConfigure(integration)}>
+                                                    Edit
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </TabsContent>
             </Tabs>
