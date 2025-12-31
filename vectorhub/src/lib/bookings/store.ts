@@ -10,6 +10,10 @@ export async function listBookings() {
     return bookingsStore.getAll();
 }
 
+export async function getBookingById(id: string) {
+    return bookingsStore.getById(id);
+}
+
 export async function createBooking(booking: Booking) {
     return bookingsStore.create(booking);
 }
