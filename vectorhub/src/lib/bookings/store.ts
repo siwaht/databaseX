@@ -30,26 +30,33 @@ export async function deleteBooking(id: string) {
     return bookingsStore.delete(id);
 }
 
-export async function getBookingSettings() {
+export async function getBookingSettings(): Promise<BookingSettings> {
+    const defaults: BookingSettings = {
+        id: "default",
+        timezone: "UTC",
+        availability: {
+            "Monday": { start: "09:00", end: "17:00" },
+            "Tuesday": { start: "09:00", end: "17:00" },
+            "Wednesday": { start: "09:00", end: "17:00" },
+            "Thursday": { start: "09:00", end: "17:00" },
+            "Friday": { start: "09:00", end: "17:00" },
+            "Saturday": null,
+            "Sunday": null
+        },
+        brandColor: "#000000"
+    };
+    
     const settings = await settingsStore.getById("default");
     if (!settings) {
-        // Return defaults if not set
-        return {
-            id: "default",
-            timezone: "UTC",
-            availability: {
-                "Monday": { start: "09:00", end: "17:00" },
-                "Tuesday": { start: "09:00", end: "17:00" },
-                "Wednesday": { start: "09:00", end: "17:00" },
-                "Thursday": { start: "09:00", end: "17:00" },
-                "Friday": { start: "09:00", end: "17:00" },
-                "Saturday": null,
-                "Sunday": null
-            },
-            brandColor: "#000000"
-        };
+        return defaults;
     }
-    return settings;
+    
+    // Merge stored settings with defaults to ensure all fields exist
+    return {
+        ...defaults,
+        ...settings,
+        availability: settings.availability || defaults.availability,
+    };
 }
 
 export async function saveBookingSettings(settings: Omit<BookingSettings, "id">) {
