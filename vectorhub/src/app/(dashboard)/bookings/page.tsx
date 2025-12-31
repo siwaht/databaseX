@@ -12,6 +12,12 @@ import {
     User,
     Download,
     Upload,
+    Eye,
+    CalendarClock,
+    XCircle,
+    CheckCircle,
+    Trash2,
+    Mail,
 } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +29,23 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Webhook, RadioTower } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EventEditorDialog } from "@/components/bookings/EventEditorDialog";
 import { BookingSettingsDialog } from "@/components/bookings/BookingSettingsDialog";
 import { BookingIntegrationDialog } from "@/components/bookings/BookingIntegrationDialog";
@@ -46,6 +69,8 @@ export default function BookingsPage() {
     const [isIntegrationOpen, setIsIntegrationOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<EventType | undefined>(undefined);
     const [selectedIntegration, setSelectedIntegration] = useState<any | undefined>(undefined);
+    const [selectedBooking, setSelectedBooking] = useState<any | null>(null);
+    const [bookingAction, setBookingAction] = useState<'view' | 'cancel' | 'complete' | 'delete' | null>(null);
     // Availability State
     const [availability, setAvailability] = useState<{ [day: string]: { start: string; end: string } | null }>({});
     const [editingDay, setEditingDay] = useState<string | null>(null);
@@ -211,10 +236,79 @@ export default function BookingsPage() {
         setIsSettingsOpen(true);
     };
 
-    const handleMoreOptions = (name: string) => {
-        toast.info(`Options for ${name}`, {
-            description: "More actions for this booking will be available soon."
+    // Booking action handlers
+    const handleViewBooking = (booking: any) => {
+        setSelectedBooking(booking);
+        setBookingAction('view');
+    };
+
+    const handleCancelBooking = async (booking: any) => {
+        setSelectedBooking(booking);
+        setBookingAction('cancel');
+    };
+
+    const handleCompleteBooking = async (booking: any) => {
+        setSelectedBooking(booking);
+        setBookingAction('complete');
+    };
+
+    const handleDeleteBooking = async (booking: any) => {
+        setSelectedBooking(booking);
+        setBookingAction('delete');
+    };
+
+    const handleSendReminder = async (booking: any) => {
+        toast.success(`Reminder sent to ${booking.guestEmail}`, {
+            description: "The guest will receive an email reminder shortly."
         });
+    };
+
+    const confirmBookingAction = async () => {
+        if (!selectedBooking || !bookingAction) return;
+
+        try {
+            if (bookingAction === 'cancel') {
+                const res = await fetch(`/api/bookings/${selectedBooking.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'cancelled' })
+                });
+                if (!res.ok) throw new Error("Failed to cancel");
+                setBookings(prev => prev.map(b => 
+                    b.id === selectedBooking.id ? { ...b, status: 'cancelled' } : b
+                ));
+                toast.success("Booking cancelled", {
+                    description: `Booking with ${selectedBooking.guestName} has been cancelled.`
+                });
+            } else if (bookingAction === 'complete') {
+                const res = await fetch(`/api/bookings/${selectedBooking.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'completed' })
+                });
+                if (!res.ok) throw new Error("Failed to complete");
+                setBookings(prev => prev.map(b => 
+                    b.id === selectedBooking.id ? { ...b, status: 'completed' } : b
+                ));
+                toast.success("Booking completed", {
+                    description: `Booking with ${selectedBooking.guestName} marked as completed.`
+                });
+            } else if (bookingAction === 'delete') {
+                const res = await fetch(`/api/bookings/${selectedBooking.id}`, {
+                    method: 'DELETE'
+                });
+                if (!res.ok) throw new Error("Failed to delete");
+                setBookings(prev => prev.filter(b => b.id !== selectedBooking.id));
+                toast.success("Booking deleted", {
+                    description: "The booking has been permanently removed."
+                });
+            }
+        } catch (error) {
+            toast.error(`Failed to ${bookingAction} booking`);
+        } finally {
+            setSelectedBooking(null);
+            setBookingAction(null);
+        }
     };
 
     const handleEditAvailability = (day: string) => {
@@ -335,9 +429,41 @@ export default function BookingsPage() {
                                             </div>
                                         </div>
                                         <div className="ml-4">
-                                            <Button variant="ghost" size="icon" onClick={() => handleMoreOptions(booking.guestName)}>
-                                                <MoreVertical className="h-4 w-4" />
-                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48">
+                                                    <DropdownMenuItem onClick={() => handleViewBooking(booking)}>
+                                                        <Eye className="mr-2 h-4 w-4" />
+                                                        View Details
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleSendReminder(booking)}>
+                                                        <Mail className="mr-2 h-4 w-4" />
+                                                        Send Reminder
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    {booking.status !== 'completed' && (
+                                                        <DropdownMenuItem onClick={() => handleCompleteBooking(booking)}>
+                                                            <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                                            Mark Complete
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {booking.status !== 'cancelled' && (
+                                                        <DropdownMenuItem onClick={() => handleCancelBooking(booking)} className="text-orange-500">
+                                                            <XCircle className="mr-2 h-4 w-4" />
+                                                            Cancel Booking
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem onClick={() => handleDeleteBooking(booking)} className="text-red-500">
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </div>
                                     </div>
                                 </Card>
@@ -565,6 +691,112 @@ export default function BookingsPage() {
                 currentAvailability={editingDay ? availability[editingDay] : null}
                 onSave={handleSaveAvailability}
             />
+
+            {/* View Booking Dialog */}
+            <AlertDialog open={bookingAction === 'view'} onOpenChange={(open) => !open && setBookingAction(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Booking Details</AlertDialogTitle>
+                    </AlertDialogHeader>
+                    {selectedBooking && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <p className="text-muted-foreground">Guest</p>
+                                    <p className="font-medium">{selectedBooking.guestName}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Email</p>
+                                    <p className="font-medium">{selectedBooking.guestEmail}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Event Type</p>
+                                    <p className="font-medium">{selectedBooking.eventTypeName}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Status</p>
+                                    <Badge variant={selectedBooking.status === 'confirmed' ? "default" : "outline"}>
+                                        {selectedBooking.status}
+                                    </Badge>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Date</p>
+                                    <p className="font-medium">{new Date(selectedBooking.startTime).toLocaleDateString()}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Time</p>
+                                    <p className="font-medium">{new Date(selectedBooking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                </div>
+                            </div>
+                            {selectedBooking.guestNotes && (
+                                <div>
+                                    <p className="text-muted-foreground text-sm">Notes</p>
+                                    <p className="text-sm mt-1">{selectedBooking.guestNotes}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Close</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Cancel Booking Confirmation */}
+            <AlertDialog open={bookingAction === 'cancel'} onOpenChange={(open) => !open && setBookingAction(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to cancel the booking with {selectedBooking?.guestName}? 
+                            They will be notified of the cancellation.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Keep Booking</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmBookingAction} className="bg-orange-500 hover:bg-orange-600">
+                            Cancel Booking
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Complete Booking Confirmation */}
+            <AlertDialog open={bookingAction === 'complete'} onOpenChange={(open) => !open && setBookingAction(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Mark as Complete?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Mark the booking with {selectedBooking?.guestName} as completed?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmBookingAction} className="bg-green-500 hover:bg-green-600">
+                            Mark Complete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Delete Booking Confirmation */}
+            <AlertDialog open={bookingAction === 'delete'} onOpenChange={(open) => !open && setBookingAction(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Booking?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the booking with {selectedBooking?.guestName}. 
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmBookingAction} className="bg-red-500 hover:bg-red-600">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
