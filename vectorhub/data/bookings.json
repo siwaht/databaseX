@@ -8,7 +8,33 @@
     "guestName": "vanshika",
     "guestEmail": "vanshika@example.com",
     "guestNotes": "My teeth are yellow",
-    "status": "confirmed",
+    "status": "cancelled",
     "createdAt": "2025-12-31T11:43:57.613Z"
+  },
+  {
+    "id": "1842030c-1c07-412e-b7e7-78a4621d8cae",
+    "eventTypeId": "7e8547fd-3e69-4948-a17b-68fcf80c9385",
+    "eventTypeName": "Dental Drilling",
+    "startTime": "2026-01-01T09:00:00",
+    "endTime": "2026-01-01T10:00:00.000Z",
+    "guestName": "Sam",
+    "guestEmail": "sam@gmail.com",
+    "guestPhone": "1234567890",
+    "guestNotes": "Dental whitening appointment.",
+    "status": "cancelled",
+    "createdAt": "2025-12-31T12:56:44.423Z"
+  },
+  {
+    "id": "06243511-801a-44d4-adc3-e824753c8372",
+    "eventTypeId": "7e8547fd-3e69-4948-a17b-68fcf80c9385",
+    "eventTypeName": "Dental Drilling",
+    "startTime": "2026-01-01T10:00:00",
+    "endTime": "2026-01-01T11:00:00.000Z",
+    "guestName": "Sam",
+    "guestEmail": "sam@gmail.com",
+    "guestPhone": "1234567890",
+    "guestNotes": "Dental drilling appointment.",
+    "status": "cancelled",
+    "createdAt": "2025-12-31T12:56:44.475Z"
   }
 ]
