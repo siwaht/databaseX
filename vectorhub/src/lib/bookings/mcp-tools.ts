@@ -154,6 +154,7 @@ export const bookingMcpTools = [
                 guestName: { type: "string", description: "Guest's full name" },
                 guestEmail: { type: "string", description: "Guest's email address" },
                 guestPhone: { type: "string", description: "Guest's phone number" },
+                phone: { type: "string", description: "Guest's phone number (alias for guestPhone)" },
                 notes: { type: "string", description: "Notes about the booking" },
                 agenda: { type: "string", description: "Meeting agenda or topics to discuss" },
                 customFields: { 
@@ -200,6 +201,7 @@ export const bookingMcpTools = [
                 guestName: { type: "string", description: "Guest's full name" },
                 guestEmail: { type: "string", description: "Guest's email address" },
                 guestPhone: { type: "string", description: "Guest's phone number" },
+                phone: { type: "string", description: "Guest's phone number (alias for guestPhone)" },
                 notes: { type: "string", description: "Notes about the booking" },
                 agenda: { type: "string", description: "Meeting agenda" },
             },
@@ -672,6 +674,9 @@ export async function handleBookingToolCall(
 
                 // Accept both 'notes' and 'guestNotes' for flexibility
                 const bookingNotes = (args.notes as string) || (args.guestNotes as string) || undefined;
+                
+                // Accept both 'phone' and 'guestPhone' for flexibility
+                const guestPhone = (args.guestPhone as string) || (args.phone as string) || undefined;
 
                 // Process custom fields
                 let customFieldValues: CustomFieldValue[] | undefined;
@@ -691,7 +696,7 @@ export async function handleBookingToolCall(
                     endTime: endTime,
                     guestName: args.guestName as string,
                     guestEmail: args.guestEmail as string,
-                    guestPhone: args.guestPhone as string | undefined,
+                    guestPhone: guestPhone,
                     guestNotes: bookingNotes,
                     agenda: args.agenda as string | undefined,
                     status: "confirmed",
@@ -781,7 +786,9 @@ export async function handleBookingToolCall(
                     };
                     
                     if (args.guestName) updates.guestName = args.guestName as string;
-                    if (args.guestPhone) updates.guestPhone = args.guestPhone as string;
+                    // Accept both phone and guestPhone
+                    const phoneValue = (args.guestPhone as string) || (args.phone as string);
+                    if (phoneValue) updates.guestPhone = phoneValue;
                     if (args.notes) updates.guestNotes = args.notes as string;
                     if (args.agenda) updates.agenda = args.agenda as string;
                     
@@ -798,6 +805,9 @@ export async function handleBookingToolCall(
                     };
                 } else {
                     // Create new booking
+                    // Accept both phone and guestPhone
+                    const phoneValue = (args.guestPhone as string) || (args.phone as string);
+                    
                     const newBooking: Booking = {
                         id: crypto.randomUUID(),
                         eventTypeId: args.eventTypeId as string,
@@ -806,7 +816,7 @@ export async function handleBookingToolCall(
                         endTime: endTime,
                         guestName: args.guestName as string,
                         guestEmail: args.guestEmail as string,
-                        guestPhone: args.guestPhone as string | undefined,
+                        guestPhone: phoneValue,
                         guestNotes: args.notes as string | undefined,
                         agenda: args.agenda as string | undefined,
                         status: "confirmed",

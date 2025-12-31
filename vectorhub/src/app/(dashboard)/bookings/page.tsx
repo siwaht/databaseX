@@ -948,6 +948,12 @@ export default function BookingsPage() {
                                     <p className="text-muted-foreground">Email</p>
                                     <p className="font-medium">{selectedBooking.guestEmail}</p>
                                 </div>
+                                {selectedBooking.guestPhone && (
+                                    <div>
+                                        <p className="text-muted-foreground">Phone</p>
+                                        <p className="font-medium">{selectedBooking.guestPhone}</p>
+                                    </div>
+                                )}
                                 <div>
                                     <p className="text-muted-foreground">Event Type</p>
                                     <p className="font-medium">{selectedBooking.eventTypeName}</p>
@@ -967,10 +973,24 @@ export default function BookingsPage() {
                                     <p className="font-medium">{new Date(selectedBooking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                 </div>
                             </div>
+                            {selectedBooking.agenda && (
+                                <div>
+                                    <p className="text-muted-foreground text-sm">Agenda</p>
+                                    <p className="text-sm mt-1">{selectedBooking.agenda}</p>
+                                </div>
+                            )}
                             {selectedBooking.guestNotes && (
                                 <div>
                                     <p className="text-muted-foreground text-sm">Notes</p>
                                     <p className="text-sm mt-1">{selectedBooking.guestNotes}</p>
+                                </div>
+                            )}
+                            {selectedBooking.meetingUrl && (
+                                <div>
+                                    <p className="text-muted-foreground text-sm">Meeting URL</p>
+                                    <a href={selectedBooking.meetingUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline mt-1 block">
+                                        {selectedBooking.meetingUrl}
+                                    </a>
                                 </div>
                             )}
                         </div>
