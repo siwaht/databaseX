@@ -10,21 +10,5 @@
     "guestNotes": "My teeth are yellow",
     "status": "confirmed",
     "createdAt": "2025-12-31T11:43:57.613Z"
-  },
-  {
-    "id": "446c9211-8299-46af-a8b2-0ce236a9c0e9",
-    "eventTypeId": "7e8547fd-3e69-4948-a17b-68fcf80c9385",
-    "eventTypeName": "Dental Drilling",
-    "startTime": "2026-01-03T15:00:00.000Z",
-    "endTime": "2026-01-03T16:00:00.000Z",
-    "guestName": "vanshika",
-    "guestEmail": "vanshika@example.com",
-    "guestNotes": "My teeth are yellow",
-    "status": "confirmed",
-    "createdAt": "2025-12-31T11:44:22.496Z",
-    "sessionId": "283751ac0d664671b3172f339f65e100",
-    "action": "sendMessage",
-    "chatInput": "make it for 3rd jan",
-    "toolCallId": "call_xhVPuKEB37ttB17j2oYkdZ3G"
   }
 ]
