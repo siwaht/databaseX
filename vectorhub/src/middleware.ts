@@ -27,8 +27,11 @@ export default withAuth(
         if (request.nextUrl.pathname.startsWith("/api/")) {
             const origin = request.headers.get("origin");
 
-            // Validate origin against allowed list
-            if (origin && (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*"))) {
+            // Allow all origins for MCP endpoint (needed for external AI agents)
+            if (request.nextUrl.pathname.startsWith("/api/bookings/mcp")) {
+                response.headers.set("Access-Control-Allow-Origin", "*");
+            } else if (origin && (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*"))) {
+                // Validate origin against allowed list for other API routes
                 response.headers.set("Access-Control-Allow-Origin", origin);
             }
 
@@ -64,6 +67,7 @@ export default withAuth(
                     "/api/auth",
                     "/api/health",
                     "/api/webhooks",
+                    "/api/bookings/mcp",  // MCP endpoint for AI agents
                     "/login",
                     "/register",
                     "/api/setup",
