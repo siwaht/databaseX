@@ -101,9 +101,20 @@ export default function BookingsPage() {
                     fetch('/api/bookings/settings')
                 ]);
 
-                if (eventsRes.ok) setEvents(await eventsRes.json());
-                if (integrationsRes.ok) setIntegrations(await integrationsRes.json());
-                if (bookingsRes.ok) setBookings(await bookingsRes.json());
+                if (eventsRes.ok) {
+                    const eventsData = await eventsRes.json();
+                    // Handle both array and { data: [...] } formats
+                    setEvents(Array.isArray(eventsData) ? eventsData : (eventsData.data || []));
+                }
+                if (integrationsRes.ok) {
+                    const integrationsData = await integrationsRes.json();
+                    setIntegrations(Array.isArray(integrationsData) ? integrationsData : (integrationsData.data || []));
+                }
+                if (bookingsRes.ok) {
+                    const bookingsData = await bookingsRes.json();
+                    // Handle both array and { data: [...] } formats
+                    setBookings(Array.isArray(bookingsData) ? bookingsData : (bookingsData.data || []));
+                }
                 if (settingsRes.ok) {
                     const settings = await settingsRes.json();
                     if (settings.availability) {
