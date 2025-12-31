@@ -136,19 +136,22 @@ export const bookingMcpTools = [
         name: "booking_create",
         description: `Create a scheduled booking/appointment with a SPECIFIC DATE AND TIME.
         
-        IMPORTANT: Call get_current_datetime FIRST to get the correct date for relative terms like "Monday" or "next week".
+        IMPORTANT: 
+        1. Call get_current_datetime FIRST to get the correct date for relative terms like "Monday" or "next week".
+        2. Call booking_find FIRST to check if guest already has a booking - use booking_update instead if updating.
         
-        Use this when someone wants to book a meeting at a particular time slot.
+        Use this when someone wants to book a NEW meeting at a particular time slot.
         Requires: eventTypeId, startTime, guestName, guestEmail.
         
         startTime MUST be a valid ISO 8601 datetime string (e.g., "2025-01-06T15:00:00").
-        - For "3pm" use "15:00:00"
-        - For "3am" use "03:00:00"`,
+        - For "3pm" use "15:00:00" (24-hour format)
+        - For "3am" use "03:00:00"
+        - NEVER use 12-hour format like "3:00 PM"`,
         inputSchema: {
             type: "object",
             properties: {
                 eventTypeId: { type: "string", description: "The event type ID (get from event_types_list)" },
-                startTime: { type: "string", description: "Start time in ISO format (REQUIRED for bookings)" },
+                startTime: { type: "string", description: "Start time in ISO format, e.g., '2025-01-06T15:00:00' for 3pm (REQUIRED)" },
                 endTime: { type: "string", description: "End time in ISO format (optional, auto-calculated from event duration)" },
                 guestName: { type: "string", description: "Guest's full name" },
                 guestEmail: { type: "string", description: "Guest's email address" },
@@ -160,6 +163,47 @@ export const bookingMcpTools = [
                     description: "Custom field values as key-value pairs (e.g., {\"budget\": \"10000\", \"company_size\": \"50-100\"})",
                     additionalProperties: true
                 },
+            },
+            required: ["eventTypeId", "startTime", "guestName", "guestEmail"],
+        },
+    },
+    {
+        name: "booking_find",
+        description: `Find existing bookings by guest email, name, or phone. 
+        
+        IMPORTANT: Call this BEFORE creating a booking to check if the guest already has one.
+        If found, use booking_update instead of booking_create to avoid duplicates.`,
+        inputSchema: {
+            type: "object",
+            properties: {
+                email: { type: "string", description: "Guest's email to search for" },
+                name: { type: "string", description: "Guest's name to search for (partial match)" },
+                phone: { type: "string", description: "Guest's phone to search for" },
+                includeCompleted: { type: "boolean", description: "Include completed/cancelled bookings", default: false },
+            },
+        },
+    },
+    {
+        name: "booking_upsert",
+        description: `Smart booking create or update - automatically finds existing booking and updates it, or creates new one.
+        
+        Use this instead of booking_create when you want to avoid duplicates.
+        If guest (by email) already has an active booking, it updates that booking.
+        Otherwise, creates a new booking.
+        
+        IMPORTANT: Call get_current_datetime FIRST to get correct dates.
+        
+        startTime format: ISO 8601 (e.g., "2025-01-06T15:00:00" for 3pm)`,
+        inputSchema: {
+            type: "object",
+            properties: {
+                eventTypeId: { type: "string", description: "The event type ID" },
+                startTime: { type: "string", description: "Start time in ISO format, e.g., '2025-01-06T15:00:00'" },
+                guestName: { type: "string", description: "Guest's full name" },
+                guestEmail: { type: "string", description: "Guest's email address" },
+                guestPhone: { type: "string", description: "Guest's phone number" },
+                notes: { type: "string", description: "Notes about the booking" },
+                agenda: { type: "string", description: "Meeting agenda" },
             },
             required: ["eventTypeId", "startTime", "guestName", "guestEmail"],
         },
@@ -663,6 +707,126 @@ export async function handleBookingToolCall(
                 await broadcastBookingEvent("booking.created", created as unknown as Record<string, unknown>);
 
                 return { success: true, data: created };
+            }
+
+            case "booking_find": {
+                let bookings = await listBookings();
+                
+                // Filter by status (exclude completed/cancelled by default)
+                if (!args.includeCompleted) {
+                    bookings = bookings.filter(b => b.status !== "completed" && b.status !== "cancelled");
+                }
+                
+                // Search by email (exact match, case-insensitive)
+                if (args.email) {
+                    const email = (args.email as string).toLowerCase();
+                    bookings = bookings.filter(b => b.guestEmail?.toLowerCase() === email);
+                }
+                
+                // Search by name (partial match, case-insensitive)
+                if (args.name) {
+                    const name = (args.name as string).toLowerCase();
+                    bookings = bookings.filter(b => b.guestName?.toLowerCase().includes(name));
+                }
+                
+                // Search by phone (partial match)
+                if (args.phone) {
+                    const phone = (args.phone as string).replace(/\D/g, '');
+                    bookings = bookings.filter(b => b.guestPhone?.replace(/\D/g, '').includes(phone));
+                }
+                
+                return { 
+                    success: true, 
+                    data: {
+                        found: bookings.length > 0,
+                        count: bookings.length,
+                        bookings,
+                        tip: bookings.length > 0 
+                            ? "Guest has existing booking(s). Use booking_update with the booking ID to modify instead of creating a duplicate."
+                            : "No existing bookings found. Safe to create a new booking."
+                    }
+                };
+            }
+
+            case "booking_upsert": {
+                // First, check if guest already has an active booking
+                const existingBookings = await listBookings();
+                const guestEmail = (args.guestEmail as string).toLowerCase();
+                const existingBooking = existingBookings.find(
+                    b => b.guestEmail?.toLowerCase() === guestEmail && 
+                         b.status !== "completed" && 
+                         b.status !== "cancelled"
+                );
+                
+                const eventTypes = await listEventTypes();
+                const eventType = eventTypes.find((e) => e.id === args.eventTypeId);
+                
+                if (!eventType) {
+                    return { success: false, error: `Event type not found: ${args.eventTypeId}` };
+                }
+                
+                // Calculate end time
+                let endTime = args.endTime as string;
+                if (!endTime && args.startTime) {
+                    const start = new Date(args.startTime as string);
+                    start.setMinutes(start.getMinutes() + eventType.duration);
+                    endTime = start.toISOString();
+                }
+                
+                if (existingBooking) {
+                    // Update existing booking
+                    const updates: Partial<Booking> = {
+                        startTime: args.startTime as string,
+                        endTime: endTime,
+                        eventTypeId: args.eventTypeId as string,
+                        eventTypeName: eventType.name,
+                    };
+                    
+                    if (args.guestName) updates.guestName = args.guestName as string;
+                    if (args.guestPhone) updates.guestPhone = args.guestPhone as string;
+                    if (args.notes) updates.guestNotes = args.notes as string;
+                    if (args.agenda) updates.agenda = args.agenda as string;
+                    
+                    const updated = await updateBooking(existingBooking.id, updates);
+                    await broadcastBookingEvent("booking.updated", updated as unknown as Record<string, unknown>);
+                    
+                    return { 
+                        success: true, 
+                        data: {
+                            ...updated,
+                            action: "updated",
+                            message: `Updated existing booking for ${guestEmail}`
+                        }
+                    };
+                } else {
+                    // Create new booking
+                    const newBooking: Booking = {
+                        id: crypto.randomUUID(),
+                        eventTypeId: args.eventTypeId as string,
+                        eventTypeName: eventType.name,
+                        startTime: args.startTime as string,
+                        endTime: endTime,
+                        guestName: args.guestName as string,
+                        guestEmail: args.guestEmail as string,
+                        guestPhone: args.guestPhone as string | undefined,
+                        guestNotes: args.notes as string | undefined,
+                        agenda: args.agenda as string | undefined,
+                        status: "confirmed",
+                        createdAt: new Date().toISOString(),
+                    };
+                    
+                    const created = await createBooking(newBooking);
+                    await broadcastBookingEvent("booking.created", created as unknown as Record<string, unknown>);
+                    
+                    return { 
+                        success: true, 
+                        data: {
+                            ...created,
+                            action: "created",
+                            message: `Created new booking for ${guestEmail}`
+                        }
+                    };
+                }
             }
 
             case "booking_update": {
