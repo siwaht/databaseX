@@ -28,6 +28,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -50,6 +59,14 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { EventEditorDialog } from "@/components/bookings/EventEditorDialog";
 import { BookingSettingsDialog } from "@/components/bookings/BookingSettingsDialog";
 import { BookingIntegrationDialog } from "@/components/bookings/BookingIntegrationDialog";
@@ -78,6 +95,18 @@ export default function BookingsPage() {
     const [bookingAction, setBookingAction] = useState<'view' | 'cancel' | 'complete' | 'delete' | null>(null);
     const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
     const [leadAction, setLeadAction] = useState<'view' | 'edit' | 'delete' | null>(null);
+    const [isNewLeadOpen, setIsNewLeadOpen] = useState(false);
+    const [newLeadForm, setNewLeadForm] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        company: '',
+        interestedIn: '',
+        notes: '',
+        priority: 'medium' as Lead['priority'],
+        preferredContactMethod: 'email' as Lead['preferredContactMethod'],
+        preferredCallbackTime: '',
+    });
     // Availability State
     const [availability, setAvailability] = useState<{ [day: string]: { start: string; end: string } | null }>({});
     const [editingDay, setEditingDay] = useState<string | null>(null);
@@ -354,6 +383,41 @@ export default function BookingsPage() {
         }
     };
 
+    const handleCreateLead = async () => {
+        if (!newLeadForm.name || !newLeadForm.email) {
+            toast.error("Name and email are required");
+            return;
+        }
+        try {
+            const res = await fetch('/api/leads', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...newLeadForm,
+                    source: 'website',
+                })
+            });
+            if (!res.ok) throw new Error("Failed to create");
+            const created = await res.json();
+            setLeads(prev => [created, ...prev]);
+            toast.success("Lead created successfully");
+            setIsNewLeadOpen(false);
+            setNewLeadForm({
+                name: '',
+                email: '',
+                phone: '',
+                company: '',
+                interestedIn: '',
+                notes: '',
+                priority: 'medium',
+                preferredContactMethod: 'email',
+                preferredCallbackTime: '',
+            });
+        } catch (error) {
+            toast.error("Failed to create lead");
+        }
+    };
+
     const handleEditAvailability = (day: string) => {
         setEditingDay(day);
     };
@@ -525,6 +589,10 @@ export default function BookingsPage() {
                         <Button variant="outline" size="icon">
                             <Filter className="h-4 w-4" />
                         </Button>
+                        <Button onClick={() => setIsNewLeadOpen(true)}>
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            New Lead
+                        </Button>
                     </div>
 
                     {leads.length === 0 ? (
@@ -536,8 +604,11 @@ export default function BookingsPage() {
                                 <h4 className="font-medium">No leads yet</h4>
                                 <p className="text-sm text-muted-foreground max-w-sm mt-1">
                                     Leads will appear here when captured via the MCP chatbot or API.
-                                    Use lead_create tool to capture callback requests.
                                 </p>
+                                <Button variant="outline" size="sm" className="mt-3" onClick={() => setIsNewLeadOpen(true)}>
+                                    <UserPlus className="mr-2 h-4 w-4" />
+                                    Add First Lead
+                                </Button>
                             </div>
                         </Card>
                     ) : (
@@ -1067,6 +1138,134 @@ export default function BookingsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* New Lead Dialog */}
+            <Dialog open={isNewLeadOpen} onOpenChange={setIsNewLeadOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Add New Lead</DialogTitle>
+                        <DialogDescription>
+                            Capture a new lead for follow-up or callback.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="lead-name">Name *</Label>
+                                <Input
+                                    id="lead-name"
+                                    value={newLeadForm.name}
+                                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, name: e.target.value }))}
+                                    placeholder="John Doe"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="lead-email">Email *</Label>
+                                <Input
+                                    id="lead-email"
+                                    type="email"
+                                    value={newLeadForm.email}
+                                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, email: e.target.value }))}
+                                    placeholder="john@example.com"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="lead-phone">Phone</Label>
+                                <Input
+                                    id="lead-phone"
+                                    value={newLeadForm.phone}
+                                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, phone: e.target.value }))}
+                                    placeholder="+1 234 567 8900"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="lead-company">Company</Label>
+                                <Input
+                                    id="lead-company"
+                                    value={newLeadForm.company}
+                                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, company: e.target.value }))}
+                                    placeholder="Acme Inc"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Priority</Label>
+                                <Select
+                                    value={newLeadForm.priority}
+                                    onValueChange={(value) => setNewLeadForm(prev => ({ ...prev, priority: value as Lead['priority'] }))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="low">Low</SelectItem>
+                                        <SelectItem value="medium">Medium</SelectItem>
+                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="urgent">Urgent</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Contact Method</Label>
+                                <Select
+                                    value={newLeadForm.preferredContactMethod}
+                                    onValueChange={(value) => setNewLeadForm(prev => ({ ...prev, preferredContactMethod: value as Lead['preferredContactMethod'] }))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="email">Email</SelectItem>
+                                        <SelectItem value="phone">Phone</SelectItem>
+                                        <SelectItem value="callback">Callback</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="lead-interested">Interested In</Label>
+                            <Input
+                                id="lead-interested"
+                                value={newLeadForm.interestedIn}
+                                onChange={(e) => setNewLeadForm(prev => ({ ...prev, interestedIn: e.target.value }))}
+                                placeholder="Product demo, consultation, etc."
+                            />
+                        </div>
+                        {newLeadForm.preferredContactMethod === 'callback' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="lead-callback">Preferred Callback Time</Label>
+                                <Input
+                                    id="lead-callback"
+                                    value={newLeadForm.preferredCallbackTime}
+                                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, preferredCallbackTime: e.target.value }))}
+                                    placeholder="e.g., Tomorrow 2-4 PM"
+                                />
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <Label htmlFor="lead-notes">Notes</Label>
+                            <Textarea
+                                id="lead-notes"
+                                value={newLeadForm.notes}
+                                onChange={(e) => setNewLeadForm(prev => ({ ...prev, notes: e.target.value }))}
+                                placeholder="Additional context about this lead..."
+                                rows={3}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsNewLeadOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCreateLead}>
+                            Create Lead
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
