@@ -1,5 +1,28 @@
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
+export type LeadSource = 'website' | 'chatbot' | 'referral' | 'social' | 'other';
+export type LeadPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface Lead {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    company?: string;
+    source: LeadSource;
+    status: LeadStatus;
+    priority: LeadPriority;
+    notes?: string;
+    tags?: string[];
+    interestedIn?: string; // What they're interested in
+    preferredContactMethod?: 'email' | 'phone' | 'callback';
+    preferredCallbackTime?: string;
+    createdAt: string;
+    updatedAt: string;
+    assignedTo?: string;
+}
+
 export interface EventType {
     id: string;
     name: string;

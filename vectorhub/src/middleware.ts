@@ -68,6 +68,7 @@ export default withAuth(
                     "/api/health",
                     "/api/webhooks",
                     "/api/bookings/mcp",  // MCP endpoint for AI agents
+                    "/api/leads",  // Lead capture endpoint
                     "/login",
                     "/register",
                     "/api/setup",

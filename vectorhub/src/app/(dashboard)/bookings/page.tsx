@@ -18,6 +18,10 @@ import {
     CheckCircle,
     Trash2,
     Mail,
+    UserPlus,
+    Phone,
+    Building,
+    Tag,
 } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -50,7 +54,7 @@ import { EventEditorDialog } from "@/components/bookings/EventEditorDialog";
 import { BookingSettingsDialog } from "@/components/bookings/BookingSettingsDialog";
 import { BookingIntegrationDialog } from "@/components/bookings/BookingIntegrationDialog";
 import { AvailabilityDialog } from "@/components/bookings/AvailabilityDialog";
-import { EventType } from "@/types/booking";
+import { EventType, Lead } from "@/types/booking";
 
 
 import { useEffect } from "react";
@@ -62,6 +66,7 @@ export default function BookingsPage() {
     const [events, setEvents] = useState<EventType[]>([]);
     const [integrations, setIntegrations] = useState<any[]>([]);
     const [bookings, setBookings] = useState<any[]>([]);
+    const [leads, setLeads] = useState<Lead[]>([]);
 
     // Dialog States
     const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -71,6 +76,8 @@ export default function BookingsPage() {
     const [selectedIntegration, setSelectedIntegration] = useState<any | undefined>(undefined);
     const [selectedBooking, setSelectedBooking] = useState<any | null>(null);
     const [bookingAction, setBookingAction] = useState<'view' | 'cancel' | 'complete' | 'delete' | null>(null);
+    const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+    const [leadAction, setLeadAction] = useState<'view' | 'edit' | 'delete' | null>(null);
     // Availability State
     const [availability, setAvailability] = useState<{ [day: string]: { start: string; end: string } | null }>({});
     const [editingDay, setEditingDay] = useState<string | null>(null);
@@ -119,11 +126,12 @@ export default function BookingsPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const [eventsRes, integrationsRes, bookingsRes, settingsRes] = await Promise.all([
+                const [eventsRes, integrationsRes, bookingsRes, settingsRes, leadsRes] = await Promise.all([
                     fetch('/api/bookings/event-types'),
                     fetch('/api/integrations'),
                     fetch('/api/bookings'),
-                    fetch('/api/bookings/settings')
+                    fetch('/api/bookings/settings'),
+                    fetch('/api/leads')
                 ]);
 
                 if (eventsRes.ok) {
@@ -145,6 +153,10 @@ export default function BookingsPage() {
                     if (settings.availability) {
                         setAvailability(settings.availability);
                     }
+                }
+                if (leadsRes.ok) {
+                    const leadsData = await leadsRes.json();
+                    setLeads(Array.isArray(leadsData) ? leadsData : (leadsData.data || []));
                 }
             } catch (error) {
                 console.error("Failed to load data", error);
@@ -311,6 +323,37 @@ export default function BookingsPage() {
         }
     };
 
+    // Lead action handlers
+    const handleUpdateLeadStatus = async (leadId: string, status: string) => {
+        try {
+            const res = await fetch(`/api/leads/${leadId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+            if (!res.ok) throw new Error("Failed to update");
+            setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: status as Lead['status'] } : l));
+            toast.success(`Lead marked as ${status}`);
+        } catch (error) {
+            toast.error("Failed to update lead status");
+        }
+    };
+
+    const handleDeleteLead = async () => {
+        if (!selectedLead) return;
+        try {
+            const res = await fetch(`/api/leads/${selectedLead.id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error("Failed to delete");
+            setLeads(prev => prev.filter(l => l.id !== selectedLead.id));
+            toast.success("Lead deleted");
+        } catch (error) {
+            toast.error("Failed to delete lead");
+        } finally {
+            setSelectedLead(null);
+            setLeadAction(null);
+        }
+    };
+
     const handleEditAvailability = (day: string) => {
         setEditingDay(day);
     };
@@ -379,8 +422,9 @@ export default function BookingsPage() {
             </div>
 
             <Tabs defaultValue="bookings" className="w-full" onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-4 lg:w-[500px] h-auto">
+                <TabsList className="grid w-full grid-cols-5 lg:w-[600px] h-auto">
                     <TabsTrigger value="bookings" className="text-xs sm:text-sm py-2">Bookings</TabsTrigger>
+                    <TabsTrigger value="leads" className="text-xs sm:text-sm py-2">Leads</TabsTrigger>
                     <TabsTrigger value="events" className="text-xs sm:text-sm py-2">Events</TabsTrigger>
                     <TabsTrigger value="availability" className="text-xs sm:text-sm py-2">Hours</TabsTrigger>
                     <TabsTrigger value="integrations" className="text-xs sm:text-sm py-2">Integrations</TabsTrigger>
@@ -470,6 +514,130 @@ export default function BookingsPage() {
                             </motion.div>
                         ))}
                     </div>
+                </TabsContent>
+
+                <TabsContent value="leads" className="space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input placeholder="Search leads..." className="pl-9" />
+                        </div>
+                        <Button variant="outline" size="icon">
+                            <Filter className="h-4 w-4" />
+                        </Button>
+                    </div>
+
+                    {leads.length === 0 ? (
+                        <Card className="p-8">
+                            <div className="flex flex-col items-center justify-center text-center">
+                                <div className="p-3 rounded-full bg-muted/50 mb-3">
+                                    <UserPlus className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <h4 className="font-medium">No leads yet</h4>
+                                <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                                    Leads will appear here when captured via the MCP chatbot or API.
+                                    Use lead_create tool to capture callback requests.
+                                </p>
+                            </div>
+                        </Card>
+                    ) : (
+                        <div className="grid gap-4">
+                            {leads.map((lead, i) => (
+                                <motion.div
+                                    key={lead.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.05 }}
+                                >
+                                    <Card>
+                                        <div className="flex items-center p-4">
+                                            <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
+                                                <UserPlus className="h-6 w-6 text-green-500" />
+                                            </div>
+                                            <div className="flex-1 space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-sm font-medium leading-none">{lead.name}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge className={
+                                                            lead.priority === 'urgent' ? 'bg-red-500/15 text-red-700' :
+                                                            lead.priority === 'high' ? 'bg-orange-500/15 text-orange-700' :
+                                                            lead.priority === 'medium' ? 'bg-blue-500/15 text-blue-700' :
+                                                            'bg-gray-500/15 text-gray-700'
+                                                        }>
+                                                            {lead.priority}
+                                                        </Badge>
+                                                        <Badge variant={lead.status === 'new' ? "default" : "outline"}>
+                                                            {lead.status}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                                    <span className="flex items-center">
+                                                        <Mail className="mr-1 h-3 w-3" />
+                                                        {lead.email}
+                                                    </span>
+                                                    {lead.phone && (
+                                                        <span className="flex items-center">
+                                                            <Phone className="mr-1 h-3 w-3" />
+                                                            {lead.phone}
+                                                        </span>
+                                                    )}
+                                                    {lead.company && (
+                                                        <span className="flex items-center">
+                                                            <Building className="mr-1 h-3 w-3" />
+                                                            {lead.company}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {lead.interestedIn && (
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Interested in: <span className="font-medium text-foreground">{lead.interestedIn}</span>
+                                                    </div>
+                                                )}
+                                                {lead.notes && (
+                                                    <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                                                        {lead.notes}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="ml-4">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon">
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-48">
+                                                        <DropdownMenuItem onClick={() => { setSelectedLead(lead); setLeadAction('view'); }}>
+                                                            <Eye className="mr-2 h-4 w-4" />
+                                                            View Details
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleUpdateLeadStatus(lead.id, 'contacted')}>
+                                                            <Phone className="mr-2 h-4 w-4" />
+                                                            Mark Contacted
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleUpdateLeadStatus(lead.id, 'qualified')}>
+                                                            <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                                            Mark Qualified
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleUpdateLeadStatus(lead.id, 'converted')}>
+                                                            <Tag className="mr-2 h-4 w-4 text-blue-500" />
+                                                            Mark Converted
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem onClick={() => { setSelectedLead(lead); setLeadAction('delete'); }} className="text-red-500">
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </motion.div>
+                            ))}
+                        </div>
+                    )}
                 </TabsContent>
 
                 <TabsContent value="events" className="space-y-4">
@@ -792,6 +960,108 @@ export default function BookingsPage() {
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmBookingAction} className="bg-red-500 hover:bg-red-600">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* View Lead Dialog */}
+            <AlertDialog open={leadAction === 'view'} onOpenChange={(open) => !open && setLeadAction(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Lead Details</AlertDialogTitle>
+                    </AlertDialogHeader>
+                    {selectedLead && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <p className="text-muted-foreground">Name</p>
+                                    <p className="font-medium">{selectedLead.name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Email</p>
+                                    <p className="font-medium">{selectedLead.email}</p>
+                                </div>
+                                {selectedLead.phone && (
+                                    <div>
+                                        <p className="text-muted-foreground">Phone</p>
+                                        <p className="font-medium">{selectedLead.phone}</p>
+                                    </div>
+                                )}
+                                {selectedLead.company && (
+                                    <div>
+                                        <p className="text-muted-foreground">Company</p>
+                                        <p className="font-medium">{selectedLead.company}</p>
+                                    </div>
+                                )}
+                                <div>
+                                    <p className="text-muted-foreground">Status</p>
+                                    <Badge variant={selectedLead.status === 'new' ? "default" : "outline"}>
+                                        {selectedLead.status}
+                                    </Badge>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Priority</p>
+                                    <Badge className={
+                                        selectedLead.priority === 'urgent' ? 'bg-red-500/15 text-red-700' :
+                                        selectedLead.priority === 'high' ? 'bg-orange-500/15 text-orange-700' :
+                                        'bg-blue-500/15 text-blue-700'
+                                    }>
+                                        {selectedLead.priority}
+                                    </Badge>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Source</p>
+                                    <p className="font-medium">{selectedLead.source}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Contact Method</p>
+                                    <p className="font-medium">{selectedLead.preferredContactMethod || 'email'}</p>
+                                </div>
+                            </div>
+                            {selectedLead.interestedIn && (
+                                <div>
+                                    <p className="text-muted-foreground text-sm">Interested In</p>
+                                    <p className="text-sm mt-1">{selectedLead.interestedIn}</p>
+                                </div>
+                            )}
+                            {selectedLead.preferredCallbackTime && (
+                                <div>
+                                    <p className="text-muted-foreground text-sm">Preferred Callback Time</p>
+                                    <p className="text-sm mt-1">{selectedLead.preferredCallbackTime}</p>
+                                </div>
+                            )}
+                            {selectedLead.notes && (
+                                <div>
+                                    <p className="text-muted-foreground text-sm">Notes</p>
+                                    <p className="text-sm mt-1">{selectedLead.notes}</p>
+                                </div>
+                            )}
+                            <div className="text-xs text-muted-foreground">
+                                Created: {new Date(selectedLead.createdAt).toLocaleString()}
+                            </div>
+                        </div>
+                    )}
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Close</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Delete Lead Confirmation */}
+            <AlertDialog open={leadAction === 'delete'} onOpenChange={(open) => !open && setLeadAction(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Lead?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the lead for {selectedLead?.name}. 
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteLead} className="bg-red-500 hover:bg-red-600">
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>

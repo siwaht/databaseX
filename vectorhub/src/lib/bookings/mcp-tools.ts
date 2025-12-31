@@ -1,5 +1,5 @@
 /**
- * MCP Tools for Booking Management
+ * MCP Tools for Booking Management and Lead Capture
  * Provides a standardized interface for AI agents to interact with the booking system
  */
 
@@ -14,7 +14,15 @@ import {
     deleteEventType,
     getBookingSettings,
 } from "./store";
-import { Booking, EventType, BookingStatus } from "@/types/booking";
+import {
+    listLeads,
+    createLead,
+    updateLead,
+    deleteLead,
+    getLead,
+    getLeadStats,
+} from "@/lib/leads/store";
+import { Booking, EventType, BookingStatus, Lead, LeadStatus } from "@/types/booking";
 import { broadcastWebhook } from "@/lib/webhooks/delivery";
 import { listWebhookConnections, getWebhookSecret } from "@/lib/webhooks/store";
 
@@ -64,24 +72,26 @@ export const bookingMcpTools = [
     },
     {
         name: "booking_create",
-        description: "Create a new booking for a guest",
+        description: "Create a new booking for a guest. Use this when someone wants to schedule a meeting or appointment.",
         inputSchema: {
             type: "object",
             properties: {
                 eventTypeId: { type: "string", description: "The event type ID" },
                 startTime: { type: "string", description: "Start time in ISO format" },
-                endTime: { type: "string", description: "End time in ISO format" },
+                endTime: { type: "string", description: "End time in ISO format (optional, calculated from duration)" },
                 guestName: { type: "string", description: "Guest's full name" },
                 guestEmail: { type: "string", description: "Guest's email address" },
-                guestNotes: { type: "string", description: "Optional notes from the guest" },
-                agenda: { type: "string", description: "Meeting agenda" },
+                guestPhone: { type: "string", description: "Guest's phone number (optional)" },
+                notes: { type: "string", description: "Notes about the booking - any additional information, requirements, or context" },
+                guestNotes: { type: "string", description: "Notes from the guest (alias for notes)" },
+                agenda: { type: "string", description: "Meeting agenda or topics to discuss" },
             },
             required: ["eventTypeId", "startTime", "guestName", "guestEmail"],
         },
     },
     {
         name: "booking_update",
-        description: "Update an existing booking",
+        description: "Update an existing booking's details, status, or notes",
         inputSchema: {
             type: "object",
             properties: {
@@ -92,7 +102,8 @@ export const bookingMcpTools = [
                 },
                 startTime: { type: "string", description: "New start time" },
                 endTime: { type: "string", description: "New end time" },
-                guestNotes: { type: "string" },
+                notes: { type: "string", description: "Updated notes for the booking" },
+                guestNotes: { type: "string", description: "Updated guest notes (alias for notes)" },
                 agenda: { type: "string" },
                 meetingUrl: { type: "string", description: "Video meeting URL" },
             },
@@ -162,6 +173,110 @@ export const bookingMcpTools = [
             required: ["eventTypeId", "date"],
         },
     },
+    // Lead Capture Tools
+    {
+        name: "lead_create",
+        description: "Capture a new lead for callback requests, inquiries, or when someone wants to be contacted later",
+        inputSchema: {
+            type: "object",
+            properties: {
+                name: { type: "string", description: "Lead's full name" },
+                email: { type: "string", description: "Lead's email address" },
+                phone: { type: "string", description: "Lead's phone number" },
+                company: { type: "string", description: "Lead's company name" },
+                source: { 
+                    type: "string", 
+                    enum: ["website", "chatbot", "referral", "social", "other"],
+                    description: "Where the lead came from"
+                },
+                priority: {
+                    type: "string",
+                    enum: ["low", "medium", "high", "urgent"],
+                    description: "Lead priority level"
+                },
+                notes: { type: "string", description: "Additional notes about the lead or their inquiry" },
+                interestedIn: { type: "string", description: "What the lead is interested in" },
+                preferredContactMethod: {
+                    type: "string",
+                    enum: ["email", "phone", "callback"],
+                    description: "How the lead prefers to be contacted"
+                },
+                preferredCallbackTime: { type: "string", description: "When the lead wants to be called back" },
+                tags: { 
+                    type: "array", 
+                    items: { type: "string" },
+                    description: "Tags to categorize the lead"
+                },
+            },
+            required: ["name", "email"],
+        },
+    },
+    {
+        name: "lead_list",
+        description: "List all captured leads with optional filtering",
+        inputSchema: {
+            type: "object",
+            properties: {
+                status: {
+                    type: "string",
+                    enum: ["new", "contacted", "qualified", "converted", "lost"],
+                    description: "Filter by lead status",
+                },
+                priority: {
+                    type: "string",
+                    enum: ["low", "medium", "high", "urgent"],
+                    description: "Filter by priority",
+                },
+                limit: {
+                    type: "number",
+                    description: "Maximum number of results",
+                    default: 50,
+                },
+            },
+        },
+    },
+    {
+        name: "lead_update",
+        description: "Update an existing lead's information or status",
+        inputSchema: {
+            type: "object",
+            properties: {
+                id: { type: "string", description: "The lead ID to update" },
+                status: {
+                    type: "string",
+                    enum: ["new", "contacted", "qualified", "converted", "lost"],
+                },
+                priority: {
+                    type: "string",
+                    enum: ["low", "medium", "high", "urgent"],
+                },
+                notes: { type: "string", description: "Updated notes" },
+                phone: { type: "string" },
+                company: { type: "string" },
+                tags: { type: "array", items: { type: "string" } },
+            },
+            required: ["id"],
+        },
+    },
+    {
+        name: "lead_get",
+        description: "Get details of a specific lead",
+        inputSchema: {
+            type: "object",
+            properties: {
+                id: { type: "string", description: "The lead ID" },
+            },
+            required: ["id"],
+        },
+    },
+    {
+        name: "lead_stats",
+        description: "Get statistics about leads (counts by status, source, priority)",
+        inputSchema: {
+            type: "object",
+            properties: {},
+        },
+    },
 ];
 
 // Tool handler implementations
@@ -222,6 +337,9 @@ export async function handleBookingToolCall(
                     endTime = start.toISOString();
                 }
 
+                // Accept both 'notes' and 'guestNotes' for flexibility
+                const bookingNotes = (args.notes as string) || (args.guestNotes as string) || undefined;
+
                 const newBooking: Booking = {
                     id: crypto.randomUUID(),
                     eventTypeId: args.eventTypeId as string,
@@ -230,7 +348,7 @@ export async function handleBookingToolCall(
                     endTime: endTime,
                     guestName: args.guestName as string,
                     guestEmail: args.guestEmail as string,
-                    guestNotes: args.guestNotes as string | undefined,
+                    guestNotes: bookingNotes,
                     agenda: args.agenda as string | undefined,
                     status: "confirmed",
                     createdAt: new Date().toISOString(),
@@ -245,8 +363,15 @@ export async function handleBookingToolCall(
             }
 
             case "booking_update": {
-                const { id, ...updates } = args;
-                const updated = await updateBooking(id as string, updates as Partial<Booking>);
+                const { id, notes, ...otherUpdates } = args;
+                
+                // Handle notes field - accept both 'notes' and 'guestNotes'
+                const updates: Partial<Booking> = { ...otherUpdates } as Partial<Booking>;
+                if (notes || args.guestNotes) {
+                    updates.guestNotes = (notes as string) || (args.guestNotes as string);
+                }
+                
+                const updated = await updateBooking(id as string, updates);
 
                 if (!updated) {
                     return { success: false, error: `Booking not found: ${id}` };
@@ -362,6 +487,84 @@ export async function handleBookingToolCall(
                         slots,
                     },
                 };
+            }
+
+            // Lead Capture Tools
+            case "lead_create": {
+                const newLead: Lead = {
+                    id: crypto.randomUUID(),
+                    name: args.name as string,
+                    email: args.email as string,
+                    phone: args.phone as string | undefined,
+                    company: args.company as string | undefined,
+                    source: (args.source as Lead["source"]) || "chatbot",
+                    status: "new",
+                    priority: (args.priority as Lead["priority"]) || "medium",
+                    notes: args.notes as string | undefined,
+                    interestedIn: args.interestedIn as string | undefined,
+                    preferredContactMethod: args.preferredContactMethod as Lead["preferredContactMethod"],
+                    preferredCallbackTime: args.preferredCallbackTime as string | undefined,
+                    tags: args.tags as string[] | undefined,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                };
+
+                const created = await createLead(newLead);
+
+                // Broadcast webhook event
+                await broadcastBookingEvent("lead.created", created as unknown as Record<string, unknown>);
+
+                return { 
+                    success: true, 
+                    data: {
+                        ...created,
+                        message: `Lead captured successfully. ${created.preferredContactMethod === 'callback' ? 'Callback requested.' : 'Will be contacted via ' + created.preferredContactMethod + '.'}`
+                    }
+                };
+            }
+
+            case "lead_list": {
+                let leads = await listLeads();
+
+                // Apply filters
+                if (args.status) {
+                    leads = leads.filter((l) => l.status === args.status);
+                }
+                if (args.priority) {
+                    leads = leads.filter((l) => l.priority === args.priority);
+                }
+
+                // Apply limit
+                const limit = (args.limit as number) || 50;
+                leads = leads.slice(0, limit);
+
+                return { success: true, data: leads };
+            }
+
+            case "lead_update": {
+                const { id, ...updates } = args;
+                const updated = await updateLead(id as string, updates as Partial<Lead>);
+
+                if (!updated) {
+                    return { success: false, error: `Lead not found: ${id}` };
+                }
+
+                await broadcastBookingEvent("lead.updated", updated as unknown as Record<string, unknown>);
+
+                return { success: true, data: updated };
+            }
+
+            case "lead_get": {
+                const lead = await getLead(args.id as string);
+                if (!lead) {
+                    return { success: false, error: `Lead not found: ${args.id}` };
+                }
+                return { success: true, data: lead };
+            }
+
+            case "lead_stats": {
+                const stats = await getLeadStats();
+                return { success: true, data: stats };
             }
 
             default:
