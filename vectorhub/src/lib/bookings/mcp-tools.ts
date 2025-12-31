@@ -28,9 +28,54 @@ import { listWebhookConnections, getWebhookSecret } from "@/lib/webhooks/store";
 
 // MCP Tool definitions following the Model Context Protocol spec
 export const bookingMcpTools = [
+    // Smart routing tool - helps AI decide between booking and lead
+    {
+        name: "capture_contact",
+        description: `Smart contact capture - automatically creates a BOOKING or LEAD based on the situation:
+        
+        USE BOOKING when: User wants to schedule a specific meeting/appointment with a date and time.
+        USE LEAD when: User wants a callback, has questions, wants to be contacted later, or doesn't have a specific time.
+        
+        This tool analyzes the request and routes to the appropriate system.`,
+        inputSchema: {
+            type: "object",
+            properties: {
+                name: { type: "string", description: "Contact's full name" },
+                email: { type: "string", description: "Contact's email address" },
+                phone: { type: "string", description: "Contact's phone number" },
+                company: { type: "string", description: "Contact's company name" },
+                requestType: {
+                    type: "string",
+                    enum: ["booking", "lead", "auto"],
+                    description: "Type of request: 'booking' for scheduled appointments, 'lead' for callbacks/inquiries, 'auto' to decide automatically",
+                    default: "auto"
+                },
+                // Booking-specific fields
+                eventTypeId: { type: "string", description: "Event type ID (for bookings)" },
+                startTime: { type: "string", description: "Appointment start time in ISO format (for bookings)" },
+                // Lead-specific fields
+                interestedIn: { type: "string", description: "What they're interested in" },
+                preferredContactMethod: {
+                    type: "string",
+                    enum: ["email", "phone", "callback"],
+                    description: "How they prefer to be contacted"
+                },
+                preferredCallbackTime: { type: "string", description: "When they want to be called back (e.g., 'Tomorrow afternoon', 'Monday 2-4 PM')" },
+                // Common fields
+                notes: { type: "string", description: "Additional notes, questions, or context" },
+                priority: {
+                    type: "string",
+                    enum: ["low", "medium", "high", "urgent"],
+                    description: "Priority level"
+                },
+            },
+            required: ["name", "email"],
+        },
+    },
+    // Booking Tools - for scheduled appointments with specific times
     {
         name: "booking_list",
-        description: "List all bookings with optional filtering by status, date range, or event type",
+        description: "List all scheduled bookings/appointments. Bookings have specific date and time slots.",
         inputSchema: {
             type: "object",
             properties: {
@@ -72,18 +117,17 @@ export const bookingMcpTools = [
     },
     {
         name: "booking_create",
-        description: "Create a new booking for a guest. Use this when someone wants to schedule a meeting or appointment.",
+        description: "Create a scheduled booking/appointment with a SPECIFIC DATE AND TIME. Use this when someone wants to book a meeting at a particular time slot. Requires: eventTypeId, startTime, name, email.",
         inputSchema: {
             type: "object",
             properties: {
-                eventTypeId: { type: "string", description: "The event type ID" },
-                startTime: { type: "string", description: "Start time in ISO format" },
-                endTime: { type: "string", description: "End time in ISO format (optional, calculated from duration)" },
+                eventTypeId: { type: "string", description: "The event type ID (get from event_types_list)" },
+                startTime: { type: "string", description: "Start time in ISO format (REQUIRED for bookings)" },
+                endTime: { type: "string", description: "End time in ISO format (optional, auto-calculated from event duration)" },
                 guestName: { type: "string", description: "Guest's full name" },
                 guestEmail: { type: "string", description: "Guest's email address" },
-                guestPhone: { type: "string", description: "Guest's phone number (optional)" },
-                notes: { type: "string", description: "Notes about the booking - any additional information, requirements, or context" },
-                guestNotes: { type: "string", description: "Notes from the guest (alias for notes)" },
+                guestPhone: { type: "string", description: "Guest's phone number" },
+                notes: { type: "string", description: "Notes about the booking" },
                 agenda: { type: "string", description: "Meeting agenda or topics to discuss" },
             },
             required: ["eventTypeId", "startTime", "guestName", "guestEmail"],
@@ -102,8 +146,7 @@ export const bookingMcpTools = [
                 },
                 startTime: { type: "string", description: "New start time" },
                 endTime: { type: "string", description: "New end time" },
-                notes: { type: "string", description: "Updated notes for the booking" },
-                guestNotes: { type: "string", description: "Updated guest notes (alias for notes)" },
+                notes: { type: "string", description: "Updated notes" },
                 agenda: { type: "string" },
                 meetingUrl: { type: "string", description: "Video meeting URL" },
             },
@@ -112,7 +155,7 @@ export const bookingMcpTools = [
     },
     {
         name: "booking_cancel",
-        description: "Cancel a booking",
+        description: "Cancel a scheduled booking",
         inputSchema: {
             type: "object",
             properties: {
@@ -133,9 +176,10 @@ export const bookingMcpTools = [
             required: ["id"],
         },
     },
+    // Event Type Tools
     {
         name: "event_types_list",
-        description: "List all available event types (meeting types)",
+        description: "List all available event/meeting types. Use this to get eventTypeId for creating bookings.",
         inputSchema: {
             type: "object",
             properties: {
@@ -149,63 +193,74 @@ export const bookingMcpTools = [
     },
     {
         name: "event_type_create",
-        description: "Create a new event type",
+        description: "Create a new event/meeting type",
         inputSchema: {
             type: "object",
             properties: {
-                name: { type: "string", description: "Event type name" },
-                description: { type: "string", description: "Description" },
+                name: { type: "string", description: "Event type name (e.g., 'Consultation', '30-min Call')" },
+                description: { type: "string", description: "Description of the event type" },
                 duration: { type: "number", description: "Duration in minutes" },
-                color: { type: "string", description: "Color hex code" },
+                color: { type: "string", description: "Color hex code for UI" },
             },
             required: ["name", "duration"],
         },
     },
     {
         name: "availability_check",
-        description: "Check available time slots for a specific date and event type",
+        description: "Check available time slots for booking on a specific date. Use before creating a booking to find open slots.",
         inputSchema: {
             type: "object",
             properties: {
                 eventTypeId: { type: "string", description: "Event type ID" },
-                date: { type: "string", description: "Date to check (YYYY-MM-DD)" },
+                date: { type: "string", description: "Date to check (YYYY-MM-DD format)" },
             },
             required: ["eventTypeId", "date"],
         },
     },
-    // Lead Capture Tools
+    // Lead Capture Tools - for callbacks and inquiries WITHOUT specific times
     {
         name: "lead_create",
-        description: "Capture a new lead for callback requests, inquiries, or when someone wants to be contacted later",
+        description: `Capture a lead for callback requests or inquiries WITHOUT a specific appointment time. 
+        
+        Use this when someone:
+        - Wants a callback but doesn't have a specific time
+        - Has questions and wants to be contacted
+        - Is interested but not ready to book
+        - Prefers to be reached out to later
+        
+        NO startTime or eventTypeId required - just contact info and preferences.`,
         inputSchema: {
             type: "object",
             properties: {
                 name: { type: "string", description: "Lead's full name" },
                 email: { type: "string", description: "Lead's email address" },
-                phone: { type: "string", description: "Lead's phone number" },
+                phone: { type: "string", description: "Lead's phone number (important for callbacks)" },
                 company: { type: "string", description: "Lead's company name" },
                 source: { 
                     type: "string", 
                     enum: ["website", "chatbot", "referral", "social", "other"],
-                    description: "Where the lead came from"
+                    description: "Where the lead came from",
+                    default: "chatbot"
                 },
                 priority: {
                     type: "string",
                     enum: ["low", "medium", "high", "urgent"],
-                    description: "Lead priority level"
+                    description: "How urgent is this lead",
+                    default: "medium"
                 },
-                notes: { type: "string", description: "Additional notes about the lead or their inquiry" },
-                interestedIn: { type: "string", description: "What the lead is interested in" },
+                notes: { type: "string", description: "Their questions, requirements, or any context" },
+                interestedIn: { type: "string", description: "What product/service they're interested in" },
                 preferredContactMethod: {
                     type: "string",
                     enum: ["email", "phone", "callback"],
-                    description: "How the lead prefers to be contacted"
+                    description: "How they want to be contacted",
+                    default: "callback"
                 },
-                preferredCallbackTime: { type: "string", description: "When the lead wants to be called back" },
+                preferredCallbackTime: { type: "string", description: "When to call back (e.g., 'Tomorrow afternoon', 'Weekdays 9-5')" },
                 tags: { 
                     type: "array", 
                     items: { type: "string" },
-                    description: "Tags to categorize the lead"
+                    description: "Tags to categorize (e.g., ['enterprise', 'demo-request'])"
                 },
             },
             required: ["name", "email"],
@@ -213,7 +268,7 @@ export const bookingMcpTools = [
     },
     {
         name: "lead_list",
-        description: "List all captured leads with optional filtering",
+        description: "List all captured leads (callback requests, inquiries)",
         inputSchema: {
             type: "object",
             properties: {
@@ -237,7 +292,7 @@ export const bookingMcpTools = [
     },
     {
         name: "lead_update",
-        description: "Update an existing lead's information or status",
+        description: "Update a lead's information or status (e.g., mark as contacted, qualified, converted)",
         inputSchema: {
             type: "object",
             properties: {
@@ -245,6 +300,7 @@ export const bookingMcpTools = [
                 status: {
                     type: "string",
                     enum: ["new", "contacted", "qualified", "converted", "lost"],
+                    description: "New status"
                 },
                 priority: {
                     type: "string",
@@ -271,7 +327,7 @@ export const bookingMcpTools = [
     },
     {
         name: "lead_stats",
-        description: "Get statistics about leads (counts by status, source, priority)",
+        description: "Get lead statistics (counts by status, source, priority)",
         inputSchema: {
             type: "object",
             properties: {},
@@ -286,6 +342,75 @@ export async function handleBookingToolCall(
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
     try {
         switch (toolName) {
+            // Smart routing tool
+            case "capture_contact": {
+                const requestType = args.requestType as string || "auto";
+                const hasScheduledTime = !!(args.startTime && args.eventTypeId);
+                
+                // Determine if this should be a booking or lead
+                let shouldBeBooking = false;
+                if (requestType === "booking") {
+                    shouldBeBooking = true;
+                } else if (requestType === "lead") {
+                    shouldBeBooking = false;
+                } else {
+                    // Auto-detect: if they have a specific time and event type, it's a booking
+                    shouldBeBooking = hasScheduledTime;
+                }
+
+                if (shouldBeBooking) {
+                    // Validate booking requirements
+                    if (!args.eventTypeId || !args.startTime) {
+                        return {
+                            success: false,
+                            error: "Booking requires eventTypeId and startTime. Use lead_create for callback requests without specific times.",
+                        };
+                    }
+
+                    // Create booking
+                    const bookingResult = await handleBookingToolCall("booking_create", {
+                        eventTypeId: args.eventTypeId,
+                        startTime: args.startTime,
+                        guestName: args.name,
+                        guestEmail: args.email,
+                        guestPhone: args.phone,
+                        notes: args.notes,
+                    });
+
+                    return {
+                        ...bookingResult,
+                        data: {
+                            type: "booking",
+                            ...(bookingResult.data as object),
+                            message: "Scheduled appointment created successfully.",
+                        },
+                    };
+                } else {
+                    // Create lead
+                    const leadResult = await handleBookingToolCall("lead_create", {
+                        name: args.name,
+                        email: args.email,
+                        phone: args.phone,
+                        company: args.company,
+                        notes: args.notes,
+                        interestedIn: args.interestedIn,
+                        preferredContactMethod: args.preferredContactMethod || "callback",
+                        preferredCallbackTime: args.preferredCallbackTime,
+                        priority: args.priority,
+                        source: "chatbot",
+                    });
+
+                    return {
+                        ...leadResult,
+                        data: {
+                            type: "lead",
+                            ...(leadResult.data as object),
+                            message: "Lead captured for follow-up. No specific appointment time - will be contacted based on preferences.",
+                        },
+                    };
+                }
+            }
+
             case "booking_list": {
                 let bookings = await listBookings();
 
