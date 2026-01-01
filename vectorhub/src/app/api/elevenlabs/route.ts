@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
     listElevenLabsConversations,
     getElevenLabsConversation,
+    getElevenLabsConversationAudio,
     sendElevenLabsFeedback,
     listElevenLabsAgents,
     PicaElevenLabsConfig,
@@ -68,86 +69,75 @@ export async function GET(request: Request) {
                     return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
                 }
                 
-                // The ElevenLabs audio endpoint returns binary audio data
-                // We'll proxy it through our API
-                const apiKey = config.elevenLabsApiKey;
-                if (!apiKey) {
-                    return NextResponse.json({ error: 'ElevenLabs API key required for audio' }, { status: 400 });
-                }
-                
-                // Retry logic for audio fetch
-                let lastError: Error | null = null;
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        const audioResponse = await fetch(
-                            `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
-                            {
-                                headers: {
-                                    'xi-api-key': apiKey,
-                                    'Accept': 'audio/mpeg, audio/wav, audio/ogg, audio/*',
-                                },
-                            }
-                        );
+                // Try using the pica-client function which handles both direct and Pica methods
+                try {
+                    const audioResult = await getElevenLabsConversationAudio(config, conversationId);
+                    
+                    // If we got binary audio data directly
+                    if (audioResult.audio_data) {
+                        return new NextResponse(audioResult.audio_data, {
+                            headers: {
+                                'Content-Type': audioResult.content_type || 'audio/mpeg',
+                                'Content-Length': audioResult.audio_data.byteLength.toString(),
+                                'Accept-Ranges': 'bytes',
+                                'Cache-Control': 'public, max-age=3600',
+                                'Access-Control-Allow-Origin': '*',
+                            },
+                        });
+                    }
+                    
+                    // If we got an audio URL, fetch the audio from it
+                    if (audioResult.audio_url) {
+                        const audioResponse = await fetch(audioResult.audio_url);
                         
                         if (!audioResponse.ok) {
-                            const errorText = await audioResponse.text();
-                            // If 404, audio doesn't exist - don't retry
-                            if (audioResponse.status === 404) {
-                                return NextResponse.json(
-                                    { error: 'Audio recording not available for this conversation' }, 
-                                    { status: 404 }
-                                );
-                            }
-                            // If 401/403, auth issue - don't retry
-                            if (audioResponse.status === 401 || audioResponse.status === 403) {
-                                return NextResponse.json(
-                                    { error: 'Invalid or expired API key' }, 
-                                    { status: audioResponse.status }
-                                );
-                            }
-                            throw new Error(`Audio fetch failed: ${audioResponse.status} - ${errorText}`);
+                            return NextResponse.json(
+                                { error: `Failed to fetch audio from URL: ${audioResponse.status}` },
+                                { status: 500 }
+                            );
                         }
                         
-                        // Get content type from response or default to audio/mpeg
-                        let contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
-                        
-                        // Ensure we have a valid audio content type
-                        if (!contentType.startsWith('audio/')) {
-                            contentType = 'audio/mpeg';
-                        }
-                        
-                        // Return the audio as a stream with proper headers for browser playback
                         const audioBuffer = await audioResponse.arrayBuffer();
+                        const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
                         
-                        // Verify we got actual audio data
-                        if (audioBuffer.byteLength === 0) {
-                            throw new Error('Empty audio response');
-                        }
-                        
-                        const headers: Record<string, string> = {
-                            'Content-Type': contentType,
-                            'Content-Length': audioBuffer.byteLength.toString(),
-                            'Accept-Ranges': 'bytes',
-                            'Cache-Control': 'public, max-age=3600',
-                            'Access-Control-Allow-Origin': '*',
-                        };
-                        
-                        return new NextResponse(audioBuffer, { headers });
-                    } catch (error) {
-                        lastError = error instanceof Error ? error : new Error('Unknown error');
-                        console.error(`Audio fetch attempt ${attempt + 1} failed:`, lastError.message);
-                        // Wait before retry (exponential backoff)
-                        if (attempt < 2) {
-                            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-                        }
+                        return new NextResponse(audioBuffer, {
+                            headers: {
+                                'Content-Type': contentType,
+                                'Content-Length': audioBuffer.byteLength.toString(),
+                                'Accept-Ranges': 'bytes',
+                                'Cache-Control': 'public, max-age=3600',
+                                'Access-Control-Allow-Origin': '*',
+                            },
+                        });
                     }
+                    
+                    return NextResponse.json(
+                        { error: 'No audio available for this conversation' },
+                        { status: 404 }
+                    );
+                } catch (error) {
+                    console.error('Audio fetch error:', error);
+                    const errorMsg = error instanceof Error ? error.message : 'Failed to fetch audio';
+                    
+                    // Check for specific error types
+                    if (errorMsg.includes('404')) {
+                        return NextResponse.json(
+                            { error: 'Audio recording not available for this conversation' },
+                            { status: 404 }
+                        );
+                    }
+                    if (errorMsg.includes('401') || errorMsg.includes('403')) {
+                        return NextResponse.json(
+                            { error: 'Invalid or expired API key' },
+                            { status: 401 }
+                        );
+                    }
+                    
+                    return NextResponse.json(
+                        { error: errorMsg },
+                        { status: 500 }
+                    );
                 }
-                
-                // All retries failed
-                return NextResponse.json(
-                    { error: lastError?.message || 'Failed to fetch audio after multiple attempts' }, 
-                    { status: 500 }
-                );
             }
             
             case 'audio-url': {
@@ -195,6 +185,105 @@ export async function GET(request: Request) {
             case 'agents': {
                 const data = await listElevenLabsAgents(config);
                 return NextResponse.json(data);
+            }
+
+            case 'debug-audio': {
+                // Debug endpoint to see raw audio response
+                const conversationId = searchParams.get('id');
+                if (!conversationId) {
+                    return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
+                }
+                
+                const apiKey = config.elevenLabsApiKey;
+                const results: Record<string, unknown> = {
+                    conversationId,
+                    hasApiKey: !!apiKey,
+                    hasPicaKeys: !!(config.secretKey && config.connectionKey),
+                };
+                
+                // Try direct API
+                if (apiKey) {
+                    try {
+                        const url = `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`;
+                        const resp = await fetch(url, {
+                            headers: { 'xi-api-key': apiKey },
+                        });
+                        
+                        results.directApi = {
+                            status: resp.status,
+                            statusText: resp.statusText,
+                            contentType: resp.headers.get('content-type'),
+                            contentLength: resp.headers.get('content-length'),
+                        };
+                        
+                        if (resp.ok) {
+                            const contentType = resp.headers.get('content-type') || '';
+                            if (contentType.includes('application/json')) {
+                                results.directApiBody = await resp.json();
+                            } else {
+                                const buffer = await resp.arrayBuffer();
+                                results.directApiBody = { 
+                                    type: 'binary', 
+                                    size: buffer.byteLength,
+                                    first20Bytes: Array.from(new Uint8Array(buffer.slice(0, 20))),
+                                };
+                            }
+                        } else {
+                            results.directApiBody = await resp.text();
+                        }
+                    } catch (error) {
+                        results.directApiError = error instanceof Error ? error.message : 'Unknown error';
+                    }
+                }
+                
+                // Try Pica
+                if (config.secretKey && config.connectionKey) {
+                    try {
+                        const url = `https://api.picaos.com/v1/passthrough/v1/convai/conversations/${conversationId}/audio`;
+                        const resp = await fetch(url, {
+                            headers: {
+                                'x-pica-secret': config.secretKey,
+                                'x-pica-connection-key': config.connectionKey,
+                                'x-pica-action-id': 'conn_mod_def::GCcb-cGKkqU::GhWURfavRkuy6xKx6kam6Q',
+                            },
+                        });
+                        
+                        results.picaApi = {
+                            status: resp.status,
+                            statusText: resp.statusText,
+                            contentType: resp.headers.get('content-type'),
+                        };
+                        
+                        if (resp.ok) {
+                            const contentType = resp.headers.get('content-type') || '';
+                            if (contentType.includes('application/json')) {
+                                results.picaApiBody = await resp.json();
+                            } else {
+                                const buffer = await resp.arrayBuffer();
+                                results.picaApiBody = { type: 'binary', size: buffer.byteLength };
+                            }
+                        } else {
+                            results.picaApiBody = await resp.text();
+                        }
+                    } catch (error) {
+                        results.picaApiError = error instanceof Error ? error.message : 'Unknown error';
+                    }
+                }
+                
+                // Also get conversation details to check has_audio
+                try {
+                    const convDetail = await getElevenLabsConversation(config, conversationId);
+                    results.conversationDetail = {
+                        has_audio: convDetail.has_audio,
+                        has_user_audio: convDetail.has_user_audio,
+                        has_response_audio: convDetail.has_response_audio,
+                        status: convDetail.status,
+                    };
+                } catch (error) {
+                    results.conversationDetailError = error instanceof Error ? error.message : 'Unknown error';
+                }
+                
+                return NextResponse.json(results);
             }
 
             default:

@@ -690,11 +690,28 @@ export default function ConversationsPage() {
         
         const conversationId = selectedElConversation.conversation_id;
         
+        // First, let's debug what's happening with the audio endpoint
+        try {
+            const debugResponse = await fetch(
+                `/api/elevenlabs?action=debug-audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}`
+            );
+            const debugData = await debugResponse.json();
+            console.log('[Audio Debug]', debugData);
+        } catch (e) {
+            console.error('[Audio Debug Error]', e);
+        }
+        
         try {
             // Always use blob method for reliability - fetch the audio first, then create object URL
             const response = await fetch(
                 `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`
             );
+            
+            console.log('[Audio Response]', {
+                status: response.status,
+                contentType: response.headers.get('content-type'),
+                contentLength: response.headers.get('content-length'),
+            });
             
             // Check if response is JSON (error) or audio
             const contentType = response.headers.get('content-type') || '';
@@ -704,6 +721,7 @@ export default function ConversationsPage() {
                 let errorMsg = 'Audio not available';
                 try {
                     const errorData = await response.json();
+                    console.log('[Audio Error Response]', errorData);
                     errorMsg = errorData.error || errorMsg;
                 } catch {
                     // Ignore JSON parse error

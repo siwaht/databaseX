@@ -203,21 +203,106 @@ export async function getElevenLabsConversation(
     );
 }
 
-// Get conversation audio
+// Get conversation audio - returns audio URL or fetches binary audio
 export async function getElevenLabsConversationAudio(
     config: PicaElevenLabsConfig,
     conversationId: string
-): Promise<{ audio_url?: string }> {
+): Promise<{ audio_url?: string; audio_data?: ArrayBuffer; content_type?: string }> {
+    // Try direct API first if key provided
     if (config.elevenLabsApiKey) {
-        return fetchElevenLabsDirect(
-            `/v1/convai/conversations/${conversationId}/audio`,
-            config.elevenLabsApiKey
-        );
+        const url = `${ELEVENLABS_API_URL}/v1/convai/conversations/${conversationId}/audio`;
+        console.log('[ElevenLabs] Fetching audio from:', url);
+        
+        const resp = await fetch(url, {
+            headers: {
+                'xi-api-key': config.elevenLabsApiKey,
+            },
+        });
+
+        console.log('[ElevenLabs] Audio response status:', resp.status);
+        console.log('[ElevenLabs] Audio response content-type:', resp.headers.get('content-type'));
+
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            console.error('[ElevenLabs] Audio error response:', errorText);
+            throw new Error(`ElevenLabs API error: ${resp.status} - ${errorText}`);
+        }
+
+        const contentType = resp.headers.get('content-type') || '';
+        
+        // Check if JSON response (contains audio_url) or binary audio
+        if (contentType.includes('application/json')) {
+            const jsonData = await resp.json();
+            console.log('[ElevenLabs] Audio JSON response:', JSON.stringify(jsonData));
+            return jsonData;
+        } else {
+            // Binary audio data
+            const audioData = await resp.arrayBuffer();
+            console.log('[ElevenLabs] Audio binary data size:', audioData.byteLength);
+            return {
+                audio_data: audioData,
+                content_type: contentType || 'audio/mpeg',
+            };
+        }
     }
     
+    // Try Pica passthrough
+    if (config.secretKey && config.connectionKey) {
+        console.log('[Pica] Fetching audio via passthrough');
+        try {
+            const result = await fetchElevenLabsPica<{ audio_url?: string }>(
+                `/v1/convai/conversations/${conversationId}/audio`,
+                ELEVENLABS_ACTION_IDS.GET_CONVERSATION_AUDIO,
+                config
+            );
+            console.log('[Pica] Audio response:', JSON.stringify(result));
+            return result;
+        } catch (error) {
+            console.error('[Pica] Audio fetch error:', error);
+            throw error;
+        }
+    }
+    
+    throw new Error('No valid credentials for audio fetch');
+}
+
+// Get history item audio (alternative audio endpoint)
+export async function getElevenLabsHistoryAudio(
+    config: PicaElevenLabsConfig,
+    historyItemId: string
+): Promise<{ audio_url?: string; audio_data?: ArrayBuffer; content_type?: string }> {
+    if (config.elevenLabsApiKey) {
+        const url = `${ELEVENLABS_API_URL}/v1/history/${historyItemId}/audio`;
+        console.log('[ElevenLabs] Fetching history audio from:', url);
+        
+        const resp = await fetch(url, {
+            headers: {
+                'xi-api-key': config.elevenLabsApiKey,
+            },
+        });
+
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            throw new Error(`ElevenLabs API error: ${resp.status} - ${errorText}`);
+        }
+
+        const contentType = resp.headers.get('content-type') || '';
+        
+        if (contentType.includes('application/json')) {
+            return resp.json();
+        } else {
+            const audioData = await resp.arrayBuffer();
+            return {
+                audio_data: audioData,
+                content_type: contentType || 'audio/mpeg',
+            };
+        }
+    }
+    
+    // Pica passthrough for history audio
     return fetchElevenLabsPica(
-        `/v1/convai/conversations/${conversationId}/audio`,
-        ELEVENLABS_ACTION_IDS.GET_CONVERSATION_AUDIO,
+        `/v1/history/${historyItemId}/audio`,
+        ELEVENLABS_ACTION_IDS.GET_HISTORY_AUDIO,
         config
     );
 }
