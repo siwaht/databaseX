@@ -49,7 +49,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { TwilioConversation, TwilioMessage, TwilioTranscription } from "@/lib/twilio/pica-client";
-import { ElevenLabsConversation, ElevenLabsConversationDetail } from "@/lib/elevenlabs/pica-client";
+import { ElevenLabsConversation, ElevenLabsConversationDetail, ElevenLabsAgent } from "@/lib/elevenlabs/pica-client";
 
 // Audio Player Component
 function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) {
@@ -369,6 +369,8 @@ export default function ConversationsPage() {
     const [elConnectionKey, setElConnectionKey] = useState('');
     const [elApiKey, setElApiKey] = useState(''); // Direct ElevenLabs API key
     const [elFilter, setElFilter] = useState<'all' | 'success' | 'failure'>('all');
+    const [elAgents, setElAgents] = useState<ElevenLabsAgent[]>([]);
+    const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
     
     // Twilio state
     const [twilioConversations, setTwilioConversations] = useState<TwilioConversation[]>([]);
@@ -396,6 +398,7 @@ export default function ConversationsPage() {
         const savedElConnection = localStorage.getItem('pica_elevenlabs_connection_key');
         const savedTwilioConnection = localStorage.getItem('pica_twilio_connection_key');
         const savedElApiKey = localStorage.getItem('elevenlabs_api_key');
+        const savedAgentId = localStorage.getItem('elevenlabs_selected_agent');
         
         if (savedSecret) setPicaSecretKey(savedSecret);
         if (savedElApiKey) {
@@ -409,6 +412,9 @@ export default function ConversationsPage() {
         if (savedTwilioConnection) {
             setTwilioConnectionKey(savedTwilioConnection);
             setIsTwilioConnected(true);
+        }
+        if (savedAgentId) {
+            setSelectedAgentId(savedAgentId);
         }
     }, []);
 
@@ -492,6 +498,30 @@ export default function ConversationsPage() {
     };
 
     // ElevenLabs functions
+    const fetchElAgents = async () => {
+        if (!elApiKey) return;
+        try {
+            const res = await fetch('/api/elevenlabs?action=agents', {
+                headers: {
+                    'x-elevenlabs-api-key': elApiKey,
+                },
+            });
+            const data = await res.json();
+            if (data.agents) {
+                setElAgents(data.agents);
+            }
+        } catch (error) {
+            console.error('Failed to fetch agents:', error);
+        }
+    };
+
+    // Fetch agents when API key is set
+    useEffect(() => {
+        if (elApiKey && isElConnected) {
+            fetchElAgents();
+        }
+    }, [elApiKey, isElConnected]);
+
     const fetchElConversations = async () => {
         if (!isElConnected) {
             toast.error('Please configure ElevenLabs credentials first');
@@ -503,6 +533,9 @@ export default function ConversationsPage() {
             let url = '/api/elevenlabs?action=conversations&page_size=50';
             if (elFilter !== 'all') {
                 url += `&call_successful=${elFilter}`;
+            }
+            if (selectedAgentId && selectedAgentId !== 'all') {
+                url += `&agent_id=${selectedAgentId}`;
             }
             const res = await fetch(url, {
                 headers: {
@@ -742,7 +775,26 @@ export default function ConversationsPage() {
             {provider === 'elevenlabs' && (
                 <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Select 
+                                value={selectedAgentId} 
+                                onValueChange={(v) => {
+                                    setSelectedAgentId(v);
+                                    localStorage.setItem('elevenlabs_selected_agent', v);
+                                }}
+                            >
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Select Agent" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Agents</SelectItem>
+                                    {elAgents.map((agent) => (
+                                        <SelectItem key={agent.agent_id} value={agent.agent_id}>
+                                            {agent.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                             <Select value={elFilter} onValueChange={(v) => setElFilter(v as 'all' | 'success' | 'failure')}>
                                 <SelectTrigger className="w-[140px]">
                                     <SelectValue placeholder="Filter" />

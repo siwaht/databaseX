@@ -3,6 +3,7 @@ import {
     listElevenLabsConversations,
     getElevenLabsConversation,
     sendElevenLabsFeedback,
+    listElevenLabsAgents,
     PicaElevenLabsConfig,
 } from "@/lib/elevenlabs/pica-client";
 
@@ -139,6 +140,11 @@ export async function GET(request: Request) {
                         audio_url: `/api/elevenlabs?action=audio&id=${conversationId}`,
                     });
                 }
+            }
+
+            case 'agents': {
+                const data = await listElevenLabsAgents(config);
+                return NextResponse.json(data);
             }
 
             default:

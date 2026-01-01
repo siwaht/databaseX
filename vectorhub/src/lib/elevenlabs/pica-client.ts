@@ -64,6 +64,21 @@ export interface ElevenLabsConversationDetail {
     };
 }
 
+export interface ElevenLabsAgent {
+    agent_id: string;
+    name: string;
+    created_at_unix_secs?: number;
+    conversation_config?: {
+        agent?: {
+            prompt?: {
+                prompt?: string;
+            };
+            first_message?: string;
+            language?: string;
+        };
+    };
+}
+
 export interface PicaElevenLabsConfig {
     secretKey: string;
     connectionKey: string;
@@ -227,4 +242,18 @@ export async function sendElevenLabsFeedback(
         config,
         { method: 'POST', body: { feedback } }
     );
+}
+
+// List all ElevenLabs agents
+export async function listElevenLabsAgents(
+    config: PicaElevenLabsConfig
+): Promise<{ agents: ElevenLabsAgent[] }> {
+    if (config.elevenLabsApiKey) {
+        return fetchElevenLabsDirect(
+            '/v1/convai/agents',
+            config.elevenLabsApiKey
+        );
+    }
+    
+    throw new Error('Direct ElevenLabs API key required to list agents');
 }
