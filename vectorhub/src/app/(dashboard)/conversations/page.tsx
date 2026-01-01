@@ -679,11 +679,21 @@ export default function ConversationsPage() {
 
     const loadElAudio = async (useAlternative = false) => {
         if (!selectedElConversation) return;
-        if (!elApiKey) {
-            toast.error('ElevenLabs API key required for audio playback');
+        if (!elApiKey && !picaSecretKey) {
+            toast.error('ElevenLabs API key or Pica credentials required for audio playback');
             setIsConfigOpen(true);
             return;
         }
+        
+        // Log conversation audio status
+        console.log('[Audio] Conversation audio status:', {
+            conversation_id: selectedElConversation.conversation_id,
+            has_audio: selectedElConversation.has_audio,
+            has_user_audio: selectedElConversation.has_user_audio,
+            has_response_audio: selectedElConversation.has_response_audio,
+            status: selectedElConversation.status,
+        });
+        
         setLoadingAudio(true);
         cleanupAudioUrl(); // Revoke previous blob URL
         setElAudioUrl(undefined); // Clear previous URL
@@ -691,13 +701,39 @@ export default function ConversationsPage() {
         const conversationId = selectedElConversation.conversation_id;
         
         // Build headers with all credentials
-        const headers: Record<string, string> = {
-            'x-pica-secret': picaSecretKey,
-            'x-pica-connection-key': elConnectionKey,
-            'x-elevenlabs-api-key': elApiKey,
-        };
+        const headers: Record<string, string> = {};
+        if (picaSecretKey) headers['x-pica-secret'] = picaSecretKey;
+        if (elConnectionKey) headers['x-pica-connection-key'] = elConnectionKey;
+        if (elApiKey) headers['x-elevenlabs-api-key'] = elApiKey;
         
-        // First, let's debug what's happening with the audio endpoint
+        // Check if conversation already has a direct recording URL
+        const directUrl = selectedElConversation.recording_url || 
+                          selectedElConversation.audio_url || 
+                          selectedElConversation.metadata?.recording_url;
+        
+        if (directUrl) {
+            console.log('[Audio] Using direct recording URL from conversation:', directUrl);
+            try {
+                const response = await fetch(directUrl);
+                if (response.ok) {
+                    const audioData = await response.arrayBuffer();
+                    if (audioData.byteLength > 0) {
+                        const contentType = response.headers.get('content-type') || 'audio/mpeg';
+                        const blob = new Blob([audioData], { type: contentType });
+                        const blobUrl = URL.createObjectURL(blob);
+                        setElAudioUrl(blobUrl);
+                        setAudioFetchMethod('blob');
+                        toast.success('Audio loaded successfully');
+                        setLoadingAudio(false);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.log('[Audio] Direct URL failed, trying API:', e);
+            }
+        }
+        
+        // Debug what's happening with the audio endpoint
         try {
             const debugResponse = await fetch(
                 `/api/elevenlabs?action=debug-audio&id=${conversationId}`,
@@ -705,6 +741,14 @@ export default function ConversationsPage() {
             );
             const debugData = await debugResponse.json();
             console.log('[Audio Debug]', debugData);
+            
+            // If debug shows a direct audio URL, try using it
+            if (debugData.directApiBody?.audio_url) {
+                console.log('[Audio] Found audio_url in debug response:', debugData.directApiBody.audio_url);
+            }
+            if (debugData.picaApiBody?.audio_url) {
+                console.log('[Audio] Found audio_url in Pica response:', debugData.picaApiBody.audio_url);
+            }
         } catch (e) {
             console.error('[Audio Debug Error]', e);
         }

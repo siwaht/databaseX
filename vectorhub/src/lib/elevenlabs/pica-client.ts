@@ -47,10 +47,13 @@ export interface ElevenLabsConversationDetail {
             call_sid?: string;
         };
         termination_reason?: string;
+        recording_url?: string; // Some conversations may have direct recording URL
     };
     has_audio?: boolean;
     has_user_audio?: boolean;
     has_response_audio?: boolean;
+    recording_url?: string; // Direct recording URL if available
+    audio_url?: string; // Alternative audio URL field
     feedback?: {
         score: 'like' | 'dislike';
     };
