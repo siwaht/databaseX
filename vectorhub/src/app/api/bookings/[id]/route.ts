@@ -92,7 +92,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
             }
         }
 
-        const updatedBooking = await updateBooking(id, data);
+        const updatedBooking = await updateBooking(id, data as Partial<typeof currentBooking>);
 
         if (!updatedBooking) {
             return NextResponse.json(

@@ -144,7 +144,7 @@ export function UserDialog({ open, onOpenChange, user, onSuccess }: UserDialogPr
             const elApiKey = localStorage.getItem('elevenlabs_api_key');
             const picaSecret = localStorage.getItem('pica_secret_key');
             const elConnectionKey = localStorage.getItem('pica_elevenlabs_connection_key');
-            
+
             if (elApiKey || (picaSecret && elConnectionKey)) {
                 const res = await fetch('/api/elevenlabs?action=agents', {
                     headers: {
@@ -309,7 +309,7 @@ export function UserDialog({ open, onOpenChange, user, onSuccess }: UserDialogPr
                             <TabsTrigger value="permissions">Permissions</TabsTrigger>
                             <TabsTrigger value="granular">Access Control</TabsTrigger>
                         </TabsList>
-                        
+
                         <ScrollArea className="flex-1 pr-4">
                             <TabsContent value="basic" className="space-y-4 mt-4">
                                 <div className="grid gap-2">
@@ -469,7 +469,7 @@ export function UserDialog({ open, onOpenChange, user, onSuccess }: UserDialogPr
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <Label>Allowed Agents</Label>
-                                            <p className="text-sm text-muted-foreground">Select which agents' conversations this user can view. Empty = all agents.</p>
+                                            <p className="text-sm text-muted-foreground">Select which agents&apos; conversations this user can view. Empty = all agents.</p>
                                         </div>
                                         <div className="flex gap-2">
                                             <Button type="button" variant="outline" size="sm" onClick={selectAllAgents} disabled={agents.length === 0}>All</Button>
@@ -505,7 +505,7 @@ export function UserDialog({ open, onOpenChange, user, onSuccess }: UserDialogPr
                             </TabsContent>
                         </ScrollArea>
                     </Tabs>
-                    
+
                     <DialogFooter className="mt-4 pt-4 border-t">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancel

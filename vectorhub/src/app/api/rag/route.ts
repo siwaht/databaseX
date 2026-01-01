@@ -70,7 +70,7 @@ async function searchMongoDB(
         // First, check if the collection exists and has documents
         const docCount = await col.countDocuments();
         logger.info(`Collection "${collection}" has ${docCount} documents`);
-        
+
         if (docCount === 0) {
             logger.warn(`Collection "${collection}" is empty`);
             return [];
@@ -80,14 +80,14 @@ async function searchMongoDB(
         const sampleDoc = await col.findOne({});
         const hasEmbedding = sampleDoc && embeddingField in sampleDoc;
         const hasContent = sampleDoc && ('content' in sampleDoc || 'text' in sampleDoc || 'message' in sampleDoc);
-        
+
         logger.info(`Sample doc fields: ${sampleDoc ? Object.keys(sampleDoc).join(', ') : 'none'}`);
         logger.info(`Has embedding field (${embeddingField}): ${hasEmbedding}, Has content: ${hasContent}`);
 
         // If no embedding field, try text search instead
         if (!hasEmbedding) {
             logger.warn(`Collection "${collection}" doesn't have embedding field "${embeddingField}", falling back to text search`);
-            
+
             // Try to find documents with text matching the query
             const textResults = await col.find({
                 $or: [
@@ -97,7 +97,7 @@ async function searchMongoDB(
                     { title: { $regex: query, $options: 'i' } },
                 ]
             }).limit(topK).toArray();
-            
+
             if (textResults.length > 0) {
                 return textResults.map((doc, idx) => ({
                     id: doc._id.toString(),
@@ -106,7 +106,7 @@ async function searchMongoDB(
                     metadata: { source: doc.source || doc.title || collection, ...doc.metadata },
                 }));
             }
-            
+
             // If no text match, just return some documents
             const anyDocs = await col.find({}).limit(topK).toArray();
             return anyDocs.map((doc, idx) => ({
@@ -156,12 +156,12 @@ async function searchMongoDB(
             id: doc._id.toString(),
             score: doc.score,
             content: doc.content || doc.text || doc.message || "",
-            metadata: { source: doc.source || doc.title, ...doc.metadata } || {},
+            metadata: { source: doc.source || doc.title, ...doc.metadata },
         }));
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
         logger.error(`MongoDB search failed: ${errorMsg}`);
-        
+
         // If vector search fails, try simple find
         if (errorMsg.includes("$vectorSearch") || errorMsg.includes("index")) {
             logger.warn("Vector search failed, trying simple document fetch");

@@ -69,7 +69,7 @@ export async function POST(request: Request) {
             }
         }
 
-        const settings = await saveBookingSettings(data);
+        const settings = await saveBookingSettings(data as Omit<import("@/types/booking").BookingSettings, "id">);
         logger.info("Booking settings updated");
 
         return NextResponse.json(settings);

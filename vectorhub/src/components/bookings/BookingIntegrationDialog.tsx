@@ -39,7 +39,7 @@ export function BookingIntegrationDialog({
     const [copied, setCopied] = useState(false);
 
     // MCP endpoint URL for AI agents
-    const mcpEndpoint = typeof window !== 'undefined' 
+    const mcpEndpoint = typeof window !== 'undefined'
         ? `${window.location.origin}/api/bookings/mcp`
         : '/api/bookings/mcp';
 
@@ -138,11 +138,10 @@ export function BookingIntegrationDialog({
                     <div className="grid grid-cols-2 gap-3">
                         <button
                             type="button"
-                            className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                                type === 'webhook'
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-muted hover:border-primary/50'
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${type === 'webhook'
+                                ? 'border-primary bg-primary/5'
+                                : 'border-muted hover:border-primary/50'
+                                }`}
                             onClick={() => setType('webhook')}
                         >
                             <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
@@ -155,11 +154,10 @@ export function BookingIntegrationDialog({
                         </button>
                         <button
                             type="button"
-                            className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                                type === 'mcp'
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-muted hover:border-primary/50'
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${type === 'mcp'
+                                ? 'border-primary bg-primary/5'
+                                : 'border-muted hover:border-primary/50'
+                                }`}
                             onClick={() => setType('mcp')}
                         >
                             <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
@@ -192,7 +190,7 @@ export function BookingIntegrationDialog({
                                     placeholder="https://your-server.com/webhook"
                                 />
                                 <p className="text-xs text-muted-foreground">
-                                    We'll send a POST request with booking data to this URL
+                                    We&apos;ll send a POST request with booking data to this URL
                                 </p>
                             </div>
 
@@ -243,7 +241,7 @@ export function BookingIntegrationDialog({
                                     <div>
                                         <h4 className="font-medium">What is MCP?</h4>
                                         <p className="text-sm text-muted-foreground mt-1">
-                                            Model Context Protocol (MCP) allows AI agents like Claude, ChatGPT, or custom bots 
+                                            Model Context Protocol (MCP) allows AI agents like Claude, ChatGPT, or custom bots
                                             to interact with your booking system programmatically.
                                         </p>
                                     </div>
@@ -276,7 +274,7 @@ export function BookingIntegrationDialog({
                                     </Button>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                    Use this URL in your AI agent's MCP configuration
+                                    Use this URL in your AI agent&apos;s MCP configuration
                                 </p>
                             </div>
 
@@ -331,7 +329,7 @@ export function BookingIntegrationDialog({
                                 </h4>
                                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
                                     <li>Copy the MCP endpoint URL above</li>
-                                    <li>Add it to your AI agent's tool configuration</li>
+                                    <li>Add it to your AI agent&apos;s tool configuration</li>
                                     <li>Call <code className="text-xs bg-muted px-1 rounded">tools/list</code> to discover available tools</li>
                                     <li>Use <code className="text-xs bg-muted px-1 rounded">tools/call</code> to execute booking operations</li>
                                 </ol>
