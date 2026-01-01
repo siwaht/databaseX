@@ -851,45 +851,95 @@ export default function ConversationsPage() {
         const totalCalls = elConversations.length;
         const successfulCalls = elConversations.filter(c => c.call_successful === 'success').length;
         const failedCalls = elConversations.filter(c => c.call_successful === 'failure').length;
+        const unknownCalls = elConversations.filter(c => c.call_successful === 'unknown').length;
         const totalDuration = elConversations.reduce((acc, c) => acc + c.call_duration_secs, 0);
         const avgDuration = totalCalls > 0 ? totalDuration / totalCalls : 0;
         const totalMessages = elConversations.reduce((acc, c) => acc + c.message_count, 0);
         const avgMessages = totalCalls > 0 ? totalMessages / totalCalls : 0;
         const successRate = totalCalls > 0 ? (successfulCalls / totalCalls) * 100 : 0;
         
-        // Group by agent
+        // Estimated costs (ElevenLabs pricing approximation)
+        // ~$0.08 per minute for conversational AI
+        const costPerMinute = 0.08;
+        const totalCost = (totalDuration / 60) * costPerMinute;
+        const avgCost = totalCalls > 0 ? totalCost / totalCalls : 0;
+        const totalCredits = Math.round(totalDuration * 10); // Approximate credits
+        const avgCredits = totalCalls > 0 ? Math.round(totalCredits / totalCalls) : 0;
+        
+        // LLM cost estimation (~$0.002 per message)
+        const llmCostPerMessage = 0.002;
+        const totalLLMCost = totalMessages * llmCostPerMessage;
+        const avgLLMCostPerMin = totalDuration > 0 ? totalLLMCost / (totalDuration / 60) : 0;
+        
+        // Group by agent with more details
         const byAgent = elConversations.reduce((acc, c) => {
             const agentName = c.agent_name || 'Unknown Agent';
-            if (!acc[agentName]) {
-                acc[agentName] = { total: 0, success: 0, failed: 0, duration: 0 };
+            const agentId = c.agent_id;
+            if (!acc[agentId]) {
+                acc[agentId] = { 
+                    name: agentName,
+                    total: 0, 
+                    success: 0, 
+                    failed: 0, 
+                    duration: 0,
+                    messages: 0,
+                };
             }
-            acc[agentName].total++;
-            if (c.call_successful === 'success') acc[agentName].success++;
-            if (c.call_successful === 'failure') acc[agentName].failed++;
-            acc[agentName].duration += c.call_duration_secs;
+            acc[agentId].total++;
+            if (c.call_successful === 'success') acc[agentId].success++;
+            if (c.call_successful === 'failure') acc[agentId].failed++;
+            acc[agentId].duration += c.call_duration_secs;
+            acc[agentId].messages += c.message_count;
             return acc;
-        }, {} as Record<string, { total: number; success: number; failed: number; duration: number }>);
+        }, {} as Record<string, { name: string; total: number; success: number; failed: number; duration: number; messages: number }>);
 
-        // Group by date (last 7 days)
-        const last7Days = Array.from({ length: 7 }, (_, i) => {
+        // Sort agents by call count
+        const sortedAgents = Object.entries(byAgent)
+            .sort(([, a], [, b]) => b.total - a.total)
+            .slice(0, 5); // Top 5 agents
+
+        // Group by date (last 30 days for better chart)
+        const last30Days = Array.from({ length: 30 }, (_, i) => {
             const date = new Date();
-            date.setDate(date.getDate() - (6 - i));
+            date.setDate(date.getDate() - (29 - i));
             return date.toISOString().split('T')[0];
         });
         
-        const byDate = last7Days.map(date => {
+        const byDate = last30Days.map(date => {
             const dayConvs = elConversations.filter(c => {
                 const convDate = new Date(c.start_time_unix_secs * 1000).toISOString().split('T')[0];
                 return convDate === date;
             });
+            const dayDuration = dayConvs.reduce((acc, c) => acc + c.call_duration_secs, 0);
+            const daySuccess = dayConvs.filter(c => c.call_successful === 'success').length;
             return {
                 date,
-                label: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+                label: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                shortLabel: new Date(date).toLocaleDateString('en-US', { day: 'numeric' }),
                 total: dayConvs.length,
-                success: dayConvs.filter(c => c.call_successful === 'success').length,
+                success: daySuccess,
                 failed: dayConvs.filter(c => c.call_successful === 'failure').length,
+                duration: dayDuration,
+                successRate: dayConvs.length > 0 ? (daySuccess / dayConvs.length) * 100 : 0,
             };
         });
+
+        // Get date range for display
+        const dateRange = {
+            start: last30Days[0],
+            end: last30Days[last30Days.length - 1],
+            startLabel: new Date(last30Days[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            endLabel: new Date(last30Days[last30Days.length - 1]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        };
+
+        // Peak hour analysis
+        const byHour = elConversations.reduce((acc, c) => {
+            const hour = new Date(c.start_time_unix_secs * 1000).getHours();
+            acc[hour] = (acc[hour] || 0) + 1;
+            return acc;
+        }, {} as Record<number, number>);
+        
+        const peakHour = Object.entries(byHour).sort(([, a], [, b]) => b - a)[0];
 
         // Twilio analytics
         const twilioTotal = twilioConversations.length;
@@ -899,13 +949,23 @@ export default function ConversationsPage() {
             totalCalls,
             successfulCalls,
             failedCalls,
+            unknownCalls,
             totalDuration,
             avgDuration,
             totalMessages,
             avgMessages,
             successRate,
+            totalCost,
+            avgCost,
+            totalCredits,
+            avgCredits,
+            totalLLMCost,
+            avgLLMCostPerMin,
             byAgent,
+            sortedAgents,
             byDate,
+            dateRange,
+            peakHour: peakHour ? { hour: parseInt(peakHour[0]), count: peakHour[1] } : null,
             twilioTotal,
             twilioActive,
         };
@@ -963,154 +1023,250 @@ export default function ConversationsPage() {
 
                 {/* Dashboard Tab */}
                 <TabsContent value="dashboard" className="space-y-6">
-                    {/* Summary Cards */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
-                                <PhoneCall className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{analytics.totalCalls}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    {analytics.totalMessages} total messages
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
-                                <Activity className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{analytics.successRate.toFixed(1)}%</div>
-                                <Progress value={analytics.successRate} className="mt-2" />
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
-                                <Timer className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">
-                                    {Math.floor(analytics.avgDuration / 60)}:{Math.floor(analytics.avgDuration % 60).toString().padStart(2, '0')}
+                    {/* Top Stats Row - Like ElevenLabs Dashboard */}
+                    <Card>
+                        <CardContent className="p-0">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 divide-x divide-y md:divide-y-0">
+                                <div className="p-4 hover:bg-muted/50 transition-colors">
+                                    <p className="text-sm text-muted-foreground">Number of calls</p>
+                                    <p className="text-2xl font-bold mt-1">{analytics.totalCalls}</p>
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                    {Math.floor(analytics.totalDuration / 60)} min total
-                                </p>
-                            </CardContent>
-                        </Card>
+                                <div className="p-4 hover:bg-muted/50 transition-colors">
+                                    <p className="text-sm text-muted-foreground">Average duration</p>
+                                    <p className="text-2xl font-bold mt-1">
+                                        {Math.floor(analytics.avgDuration / 60)}:{Math.floor(analytics.avgDuration % 60).toString().padStart(2, '0')}
+                                    </p>
+                                </div>
+                                <div className="p-4 hover:bg-muted/50 transition-colors">
+                                    <p className="text-sm text-muted-foreground">Total cost</p>
+                                    <p className="text-2xl font-bold mt-1">
+                                        {analytics.totalCredits.toLocaleString()}<span className="text-sm font-normal text-muted-foreground ml-1">credits</span>
+                                    </p>
+                                </div>
+                                <div className="p-4 hover:bg-muted/50 transition-colors">
+                                    <p className="text-sm text-muted-foreground">Average cost</p>
+                                    <p className="text-2xl font-bold mt-1">
+                                        {analytics.avgCredits}<span className="text-sm font-normal text-muted-foreground ml-1">credits/call</span>
+                                    </p>
+                                </div>
+                                <div className="p-4 hover:bg-muted/50 transition-colors">
+                                    <p className="text-sm text-muted-foreground">Total LLM cost</p>
+                                    <p className="text-2xl font-bold mt-1">${analytics.totalLLMCost.toFixed(3)}</p>
+                                </div>
+                                <div className="p-4 hover:bg-muted/50 transition-colors">
+                                    <p className="text-sm text-muted-foreground">Average LLM cost</p>
+                                    <p className="text-2xl font-bold mt-1">
+                                        ${analytics.avgLLMCostPerMin.toFixed(5)}<span className="text-sm font-normal text-muted-foreground ml-1">/min</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Call Volume Chart */}
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-base">Call Volume</CardTitle>
+                                    <CardDescription>{analytics.dateRange.startLabel} - {analytics.dateRange.endLabel}</CardDescription>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={() => setMainTab('conversations')}>
+                                    View calls <ChevronRight className="ml-1 h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {/* Simple Line Chart Visualization */}
+                            <div className="h-[200px] flex items-end gap-1 pt-4">
+                                {analytics.byDate.slice(-14).map((day, i) => {
+                                    const maxCalls = Math.max(...analytics.byDate.map(d => d.total), 1);
+                                    const height = (day.total / maxCalls) * 100;
+                                    return (
+                                        <div key={day.date} className="flex-1 flex flex-col items-center gap-1 group">
+                                            <div className="w-full relative" style={{ height: '160px' }}>
+                                                <div 
+                                                    className="absolute bottom-0 w-full bg-primary/20 hover:bg-primary/30 transition-colors rounded-t cursor-pointer"
+                                                    style={{ height: `${Math.max(height, 2)}%` }}
+                                                >
+                                                    <div 
+                                                        className="absolute bottom-0 w-full bg-primary rounded-t"
+                                                        style={{ height: `${day.total > 0 ? (day.success / day.total) * 100 : 0}%` }}
+                                                    />
+                                                </div>
+                                                {/* Tooltip */}
+                                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-popover border rounded px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-md">
+                                                    {day.total} calls • {day.success} success
+                                                </div>
+                                            </div>
+                                            <span className="text-[10px] text-muted-foreground">{i % 2 === 0 ? day.shortLabel : ''}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
+                                <span>{analytics.dateRange.startLabel}</span>
+                                <span>{analytics.dateRange.endLabel}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Success Rate & Most Called Agents Row */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {/* Overall Success Rate */}
                         <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Call Outcomes</CardTitle>
-                                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        Overall success rate
+                                        <span className="text-muted-foreground cursor-help" title="Percentage of calls marked as successful">ⓘ</span>
+                                    </CardTitle>
+                                </div>
+                                <p className="text-3xl font-bold">{analytics.successRate.toFixed(0)}%</p>
                             </CardHeader>
                             <CardContent>
-                                <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-1">
-                                        <TrendingUp className="h-4 w-4 text-green-500" />
-                                        <span className="text-sm font-medium">{analytics.successfulCalls}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <TrendingDown className="h-4 w-4 text-red-500" />
-                                        <span className="text-sm font-medium">{analytics.failedCalls}</span>
-                                    </div>
+                                {/* Success Rate Chart */}
+                                <div className="h-[150px] flex items-end gap-1">
+                                    {analytics.byDate.slice(-14).map((day) => {
+                                        return (
+                                            <div key={day.date} className="flex-1 flex flex-col items-center gap-1 group">
+                                                <div className="w-full relative" style={{ height: '120px' }}>
+                                                    <div 
+                                                        className="absolute bottom-0 w-full bg-green-500/80 hover:bg-green-500 transition-colors rounded-t cursor-pointer"
+                                                        style={{ height: `${day.successRate}%` }}
+                                                    />
+                                                    {/* Tooltip */}
+                                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-popover border rounded px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-md">
+                                                        {day.successRate.toFixed(0)}% success
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Success / Failed
-                                </p>
+                                <div className="flex items-center justify-between mt-2">
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <span className="text-muted-foreground">Filter</span>
+                                        <Badge variant="outline" className="text-xs">Success</Badge>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => setMainTab('conversations')}>
+                                        View calls <ChevronRight className="ml-1 h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Most Called Agents */}
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        Most called agents
+                                        <span className="text-muted-foreground cursor-help" title="Agents ranked by number of calls">ⓘ</span>
+                                    </CardTitle>
+                                    <Badge variant="outline" className="text-xs">Calls</Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <ScrollArea className="h-[180px]">
+                                    {analytics.sortedAgents.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {analytics.sortedAgents.map(([agentId, stats], index) => (
+                                                <div key={agentId} className="flex items-center gap-3">
+                                                    <span className="text-sm font-medium text-muted-foreground w-5">{index + 1}.</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium truncate">{stats.name}</p>
+                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <span>{stats.total} calls</span>
+                                                            <span>•</span>
+                                                            <span className="text-green-600">{stats.success} success</span>
+                                                            <span>•</span>
+                                                            <span>{Math.floor(stats.duration / stats.total / 60)}:{Math.floor((stats.duration / stats.total) % 60).toString().padStart(2, '0')} avg</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-sm font-bold">{stats.total}</p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {((stats.success / stats.total) * 100).toFixed(0)}%
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                                            <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                                            <p className="text-sm">Loading agent data...</p>
+                                        </div>
+                                    )}
+                                </ScrollArea>
+                                {analytics.sortedAgents.length > 0 && (
+                                    <div className="flex justify-end mt-2">
+                                        <Button variant="ghost" size="sm" className="text-xs">
+                                            Show all <ChevronRight className="ml-1 h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
 
-                    {/* Charts Row */}
-                    <div className="grid gap-4 md:grid-cols-2">
-                        {/* Daily Activity */}
+                    {/* Additional Stats Row */}
+                    <div className="grid gap-4 md:grid-cols-4">
                         <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base">Daily Activity (Last 7 Days)</CardTitle>
-                                <CardDescription>Call volume and success rate by day</CardDescription>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Successful Calls</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-3">
-                                    {analytics.byDate.map((day) => (
-                                        <div key={day.date} className="flex items-center gap-3">
-                                            <span className="w-10 text-sm text-muted-foreground">{day.label}</span>
-                                            <div className="flex-1 flex items-center gap-1 h-6">
-                                                {day.total > 0 ? (
-                                                    <>
-                                                        <div 
-                                                            className="h-full bg-green-500 rounded-l"
-                                                            style={{ width: `${(day.success / Math.max(...analytics.byDate.map(d => d.total), 1)) * 100}%` }}
-                                                        />
-                                                        <div 
-                                                            className="h-full bg-red-500 rounded-r"
-                                                            style={{ width: `${(day.failed / Math.max(...analytics.byDate.map(d => d.total), 1)) * 100}%` }}
-                                                        />
-                                                    </>
-                                                ) : (
-                                                    <div className="h-full w-full bg-muted rounded" />
-                                                )}
-                                            </div>
-                                            <span className="w-8 text-sm text-right">{day.total}</span>
-                                        </div>
-                                    ))}
+                                <div className="flex items-center gap-2">
+                                    <TrendingUp className="h-5 w-5 text-green-500" />
+                                    <span className="text-2xl font-bold">{analytics.successfulCalls}</span>
                                 </div>
-                                <div className="flex items-center gap-4 mt-4 text-xs">
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-3 h-3 bg-green-500 rounded" />
-                                        <span>Success</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-3 h-3 bg-red-500 rounded" />
-                                        <span>Failed</span>
-                                    </div>
-                                </div>
+                                <Progress value={analytics.successRate} className="mt-2 h-1" />
                             </CardContent>
                         </Card>
-
-                        {/* By Agent */}
                         <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base">Performance by Agent</CardTitle>
-                                <CardDescription>Call distribution across agents</CardDescription>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Failed Calls</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <ScrollArea className="h-[200px]">
-                                    <div className="space-y-4">
-                                        {Object.entries(analytics.byAgent).length > 0 ? (
-                                            Object.entries(analytics.byAgent).map(([agent, stats]) => (
-                                                <div key={agent} className="space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm font-medium truncate max-w-[150px]">{agent}</span>
-                                                        <span className="text-sm text-muted-foreground">{stats.total} calls</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Progress 
-                                                            value={stats.total > 0 ? (stats.success / stats.total) * 100 : 0} 
-                                                            className="flex-1"
-                                                        />
-                                                        <span className="text-xs text-muted-foreground w-12">
-                                                            {stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(0) : 0}%
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                                        <span>Avg: {Math.floor(stats.duration / stats.total / 60)}:{Math.floor((stats.duration / stats.total) % 60).toString().padStart(2, '0')}</span>
-                                                        <span>✓ {stats.success}</span>
-                                                        <span>✗ {stats.failed}</span>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center text-muted-foreground py-8">
-                                                <Mic className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                <p className="text-sm">No agent data available</p>
-                                                <p className="text-xs">Load conversations to see analytics</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </ScrollArea>
+                                <div className="flex items-center gap-2">
+                                    <TrendingDown className="h-5 w-5 text-red-500" />
+                                    <span className="text-2xl font-bold">{analytics.failedCalls}</span>
+                                </div>
+                                <Progress value={analytics.totalCalls > 0 ? (analytics.failedCalls / analytics.totalCalls) * 100 : 0} className="mt-2 h-1 [&>div]:bg-red-500" />
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Total Duration</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-2">
+                                    <Timer className="h-5 w-5 text-blue-500" />
+                                    <span className="text-2xl font-bold">
+                                        {Math.floor(analytics.totalDuration / 3600)}h {Math.floor((analytics.totalDuration % 3600) / 60)}m
+                                    </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {analytics.totalMessages.toLocaleString()} messages exchanged
+                                </p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Peak Hour</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-2">
+                                    <Activity className="h-5 w-5 text-purple-500" />
+                                    <span className="text-2xl font-bold">
+                                        {analytics.peakHour ? `${analytics.peakHour.hour}:00` : '--'}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {analytics.peakHour ? `${analytics.peakHour.count} calls at peak` : 'No data'}
+                                </p>
                             </CardContent>
                         </Card>
                     </div>
@@ -1150,7 +1306,7 @@ export default function ConversationsPage() {
                             <CardTitle className="text-base">Quick Actions</CardTitle>
                         </CardHeader>
                         <CardContent className="flex flex-wrap gap-2">
-                            <Button variant="outline" size="sm" onClick={fetchElConversations} disabled={loading}>
+                            <Button variant="outline" size="sm" onClick={() => fetchElConversations()} disabled={loading}>
                                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                                 Refresh ElevenLabs
                             </Button>
