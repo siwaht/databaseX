@@ -155,11 +155,15 @@ function ConversationDetailDialog({
     onClose,
     onFeedback,
     audioUrl,
+    onLoadAudio,
+    loadingAudio,
 }: {
     conversation: ElevenLabsConversationDetail | null;
     onClose: () => void;
     onFeedback: (id: string, feedback: 'like' | 'dislike') => void;
     audioUrl?: string;
+    onLoadAudio?: () => void;
+    loadingAudio?: boolean;
 }) {
     if (!conversation) return null;
 
@@ -168,6 +172,9 @@ function ConversationDetailDialog({
         const secs = seconds % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
+
+    const phoneDetails = conversation.metadata?.phone_call_details;
+    const dynamicVars = conversation.conversation_initiation_client_data?.dynamic_variables;
 
     return (
         <Dialog open={!!conversation} onOpenChange={() => onClose()}>
@@ -194,10 +201,61 @@ function ConversationDetailDialog({
                 </DialogHeader>
 
                 <div className="flex-1 overflow-auto space-y-4">
-                    {/* Audio Player */}
-                    {audioUrl && (
-                        <AudioPlayer audioUrl={audioUrl} title="Call Recording" />
+                    {/* Phone Details */}
+                    {(phoneDetails || dynamicVars) && (
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm flex items-center gap-2">
+                                    <Phone className="h-4 w-4" />
+                                    Call Information
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                                {phoneDetails?.from_number && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-muted-foreground">From:</span>
+                                        <span className="font-mono">{phoneDetails.from_number}</span>
+                                    </div>
+                                )}
+                                {phoneDetails?.to_number && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-muted-foreground">To:</span>
+                                        <span className="font-mono">{phoneDetails.to_number}</span>
+                                    </div>
+                                )}
+                                {dynamicVars && Object.keys(dynamicVars).length > 0 && (
+                                    <div className="pt-2 border-t">
+                                        <p className="text-xs text-muted-foreground mb-1">User Info:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {Object.entries(dynamicVars).map(([key, value]) => (
+                                                <Badge key={key} variant="outline" className="text-xs">
+                                                    {key}: {value}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     )}
+
+                    {/* Audio Player */}
+                    {audioUrl ? (
+                        <AudioPlayer audioUrl={audioUrl} title="Call Recording" />
+                    ) : conversation.has_audio && onLoadAudio ? (
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Volume2 className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm">Call recording available</span>
+                                </div>
+                                <Button size="sm" variant="outline" onClick={onLoadAudio} disabled={loadingAudio}>
+                                    {loadingAudio ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                                    Load Recording
+                                </Button>
+                            </div>
+                        </Card>
+                    ) : null}
 
                     {/* Summary */}
                     {conversation.analysis?.transcript_summary && (
@@ -268,6 +326,7 @@ export default function ConversationsPage() {
     const [elConversations, setElConversations] = useState<ElevenLabsConversation[]>([]);
     const [selectedElConversation, setSelectedElConversation] = useState<ElevenLabsConversationDetail | null>(null);
     const [elAudioUrl, setElAudioUrl] = useState<string | undefined>();
+    const [loadingAudio, setLoadingAudio] = useState(false);
     const [elConnectionKey, setElConnectionKey] = useState('');
     const [elApiKey, setElApiKey] = useState(''); // Direct ElevenLabs API key
     const [elFilter, setElFilter] = useState<'all' | 'success' | 'failure'>('all');
@@ -443,28 +502,37 @@ export default function ConversationsPage() {
                 toast.error(data.error);
             } else {
                 setSelectedElConversation(data);
-                
-                // Try to fetch audio
-                try {
-                    const audioRes = await fetch(`/api/elevenlabs?action=audio&id=${conversationId}`, {
-                        headers: {
-                            'x-pica-secret': picaSecretKey,
-                            'x-pica-connection-key': elConnectionKey,
-                            'x-elevenlabs-api-key': elApiKey,
-                        },
-                    });
-                    const audioData = await audioRes.json();
-                    if (audioData.audio_url) {
-                        setElAudioUrl(audioData.audio_url);
-                    }
-                } catch {
-                    // Audio may not be available
-                }
+                // Audio URL will be loaded on demand via the "Load Recording" button
             }
         } catch (error) {
             toast.error('Failed to fetch conversation details');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadElAudio = async () => {
+        if (!selectedElConversation) return;
+        setLoadingAudio(true);
+        try {
+            // Check if audio is available
+            const checkRes = await fetch(`/api/elevenlabs?action=audio-url&id=${selectedElConversation.conversation_id}`, {
+                headers: {
+                    'x-elevenlabs-api-key': elApiKey,
+                },
+            });
+            const checkData = await checkRes.json();
+            
+            if (checkData.has_audio && checkData.audio_url) {
+                setElAudioUrl(checkData.audio_url);
+                toast.success('Audio loaded');
+            } else {
+                toast.error('Audio not available for this conversation');
+            }
+        } catch {
+            toast.error('Failed to load audio');
+        } finally {
+            setLoadingAudio(false);
         }
     };
 
@@ -910,6 +978,8 @@ export default function ConversationsPage() {
                 }}
                 onFeedback={sendFeedback}
                 audioUrl={elAudioUrl}
+                onLoadAudio={loadElAudio}
+                loadingAudio={loadingAudio}
             />
 
             {/* Configuration Dialog */}

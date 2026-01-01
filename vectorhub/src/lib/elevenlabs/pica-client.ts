@@ -40,7 +40,17 @@ export interface ElevenLabsConversationDetail {
     metadata: {
         start_time_unix_secs: number;
         call_duration_secs: number;
+        cost?: number;
+        phone_call_details?: {
+            from_number?: string;
+            to_number?: string;
+            call_sid?: string;
+        };
+        termination_reason?: string;
     };
+    has_audio?: boolean;
+    has_user_audio?: boolean;
+    has_response_audio?: boolean;
     feedback?: {
         score: 'like' | 'dislike';
     };
@@ -48,6 +58,9 @@ export interface ElevenLabsConversationDetail {
         call_successful: 'success' | 'failure' | 'unknown';
         transcript_summary?: string;
         data_collection_results?: Record<string, unknown>;
+    };
+    conversation_initiation_client_data?: {
+        dynamic_variables?: Record<string, string>;
     };
 }
 

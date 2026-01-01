@@ -8,10 +8,16 @@ import {
 } from "@/lib/elevenlabs/pica-client";
 
 function getConfig(request: Request): PicaElevenLabsConfig {
+    // For audio requests, we need to use env vars since audio player can't send headers
+    const isAudioRequest = new URL(request.url).searchParams.get('action') === 'audio';
+    
     return {
         secretKey: request.headers.get('x-pica-secret') || process.env.PICA_SECRET_KEY || '',
         connectionKey: request.headers.get('x-pica-connection-key') || process.env.PICA_ELEVENLABS_CONNECTION_KEY || '',
-        elevenLabsApiKey: request.headers.get('x-elevenlabs-api-key') || process.env.ELEVENLABS_API_KEY || '',
+        // For audio, prioritize env var since browser audio player can't send headers
+        elevenLabsApiKey: isAudioRequest 
+            ? (process.env.ELEVENLABS_API_KEY || request.headers.get('x-elevenlabs-api-key') || '')
+            : (request.headers.get('x-elevenlabs-api-key') || process.env.ELEVENLABS_API_KEY || ''),
     };
 }
 
@@ -62,8 +68,71 @@ export async function GET(request: Request) {
                 if (!conversationId) {
                     return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
                 }
-                const data = await getElevenLabsConversationAudio(config, conversationId);
-                return NextResponse.json(data);
+                
+                // The ElevenLabs audio endpoint returns binary audio data
+                // We'll proxy it through our API
+                const apiKey = config.elevenLabsApiKey;
+                if (!apiKey) {
+                    return NextResponse.json({ error: 'ElevenLabs API key required for audio' }, { status: 400 });
+                }
+                
+                const audioResponse = await fetch(
+                    `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
+                    {
+                        headers: {
+                            'xi-api-key': apiKey,
+                        },
+                    }
+                );
+                
+                if (!audioResponse.ok) {
+                    const errorText = await audioResponse.text();
+                    return NextResponse.json({ error: `Audio fetch failed: ${errorText}` }, { status: audioResponse.status });
+                }
+                
+                // Return the audio as a stream with proper headers for browser playback
+                const audioBuffer = await audioResponse.arrayBuffer();
+                return new NextResponse(audioBuffer, {
+                    headers: {
+                        'Content-Type': 'audio/mpeg',
+                        'Accept-Ranges': 'bytes',
+                        'Cache-Control': 'public, max-age=3600',
+                    },
+                });
+            }
+            
+            case 'audio-url': {
+                // Return a signed URL or check if audio is available
+                const conversationId = searchParams.get('id');
+                if (!conversationId) {
+                    return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
+                }
+                
+                const apiKey = config.elevenLabsApiKey;
+                if (!apiKey) {
+                    return NextResponse.json({ has_audio: false, error: 'API key required' });
+                }
+                
+                // Check if audio exists by making a HEAD request
+                try {
+                    const checkResponse = await fetch(
+                        `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
+                        {
+                            method: 'HEAD',
+                            headers: {
+                                'xi-api-key': apiKey,
+                            },
+                        }
+                    );
+                    
+                    return NextResponse.json({ 
+                        has_audio: checkResponse.ok,
+                        // The audio URL will be fetched through our proxy
+                        audio_url: checkResponse.ok ? `/api/elevenlabs?action=audio&id=${conversationId}` : null,
+                    });
+                } catch {
+                    return NextResponse.json({ has_audio: false });
+                }
             }
 
             default:
