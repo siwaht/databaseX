@@ -38,7 +38,7 @@ const navItems = [
     { href: "/upload", icon: Upload, label: "Upload" },
     { href: "/search", icon: Search, label: "Search" },
     { href: "/bookings", icon: Calendar, label: "Bookings" },
-    { href: "/twilio", icon: Phone, label: "Twilio" },
+    { href: "/conversations", icon: Phone, label: "Conversations" },
 ];
 
 const bottomNavItems = [
