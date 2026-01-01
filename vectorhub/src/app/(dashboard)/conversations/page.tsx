@@ -679,8 +679,8 @@ export default function ConversationsPage() {
 
     const loadElAudio = async (useAlternative = false) => {
         if (!selectedElConversation) return;
-        if (!elApiKey) {
-            toast.error('ElevenLabs API key required for audio playback');
+        if (!elApiKey && !picaSecretKey) {
+            toast.error('ElevenLabs API key or Pica credentials required for audio playback');
             setIsConfigOpen(true);
             return;
         }
@@ -691,64 +691,78 @@ export default function ConversationsPage() {
         
         const conversationId = selectedElConversation.conversation_id;
         
-        // Debug logging
-        console.log('[Audio Load] Starting audio load:', {
-            conversationId,
-            selectedAgentId,
-            hasApiKey: !!elApiKey,
-            apiKeyLength: elApiKey?.length,
-        });
+        // Try direct API first, then fallback to Pica passthrough
+        let audioData: ArrayBuffer | null = null;
+        let mimeType = 'audio/mpeg';
         
-        try {
-            const url = `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`;
-            console.log('[Audio Load] Fetching from:', url);
-            
-            const response = await fetch(url);
-            
-            console.log('[Audio Load] Response:', {
-                status: response.status,
-                contentType: response.headers.get('content-type'),
-            });
-            
-            const contentType = response.headers.get('content-type') || '';
-            
-            if (!response.ok || contentType.includes('application/json')) {
-                let errorMsg = 'Audio not available';
-                try {
-                    const errorData = await response.json();
-                    console.log('[Audio Load] Error response:', errorData);
-                    errorMsg = errorData.error || errorMsg;
-                } catch {
-                    // Ignore parse error
+        // Method 1: Direct ElevenLabs API (if API key available)
+        if (elApiKey && !useAlternative) {
+            try {
+                const response = await fetch(
+                    `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`
+                );
+                
+                const contentType = response.headers.get('content-type') || '';
+                
+                if (response.ok && !contentType.includes('application/json')) {
+                    audioData = await response.arrayBuffer();
+                    if (audioData.byteLength > 0) {
+                        mimeType = contentType || 'audio/mpeg';
+                        console.log('[Audio] Direct API succeeded:', audioData.byteLength, 'bytes');
+                    } else {
+                        audioData = null;
+                    }
                 }
-                throw new Error(errorMsg);
+            } catch (e) {
+                console.log('[Audio] Direct API failed, trying Pica:', e);
             }
-            
-            const audioData = await response.arrayBuffer();
-            console.log('[Audio Load] Got audio data:', audioData.byteLength, 'bytes');
-            
-            if (audioData.byteLength === 0) {
-                throw new Error('Audio file is empty');
+        }
+        
+        // Method 2: Pica passthrough (if direct failed or useAlternative)
+        if (!audioData && picaSecretKey && elConnectionKey) {
+            try {
+                const response = await fetch(
+                    `/api/elevenlabs?action=audio&id=${conversationId}&t=${Date.now()}`,
+                    {
+                        headers: {
+                            'x-pica-secret': picaSecretKey,
+                            'x-pica-connection-key': elConnectionKey,
+                        },
+                    }
+                );
+                
+                const contentType = response.headers.get('content-type') || '';
+                
+                if (response.ok && !contentType.includes('application/json')) {
+                    audioData = await response.arrayBuffer();
+                    if (audioData.byteLength > 0) {
+                        mimeType = contentType || 'audio/mpeg';
+                        console.log('[Audio] Pica passthrough succeeded:', audioData.byteLength, 'bytes');
+                    } else {
+                        audioData = null;
+                    }
+                }
+            } catch (e) {
+                console.log('[Audio] Pica passthrough failed:', e);
             }
-            
-            let mimeType = contentType || 'audio/mpeg';
+        }
+        
+        // Process result
+        if (audioData && audioData.byteLength > 0) {
             if (!mimeType.startsWith('audio/')) {
                 mimeType = 'audio/mpeg';
             }
-            
             const blob = new Blob([audioData], { type: mimeType });
             const blobUrl = URL.createObjectURL(blob);
             setElAudioUrl(blobUrl);
             setAudioFetchMethod('blob');
             toast.success('Audio loaded successfully');
-        } catch (error) {
-            console.error('Audio load error:', error);
-            const errorMsg = error instanceof Error ? error.message : 'Failed to load audio';
-            toast.error(errorMsg);
+        } else {
+            toast.error('Audio not available for this conversation');
             setElAudioUrl(undefined);
-        } finally {
-            setLoadingAudio(false);
         }
+        
+        setLoadingAudio(false);
     };
 
     const retryAudioWithAlternative = () => {

@@ -71,60 +71,76 @@ export async function GET(request: Request) {
                     return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
                 }
                 
-                const apiKey = config.elevenLabsApiKey;
-                if (!apiKey) {
-                    return NextResponse.json({ error: 'ElevenLabs API key required for audio' }, { status: 400 });
+                // Try direct ElevenLabs API first
+                if (config.elevenLabsApiKey) {
+                    try {
+                        const audioResponse = await fetch(
+                            `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
+                            {
+                                headers: {
+                                    'xi-api-key': config.elevenLabsApiKey,
+                                },
+                            }
+                        );
+                        
+                        if (audioResponse.ok) {
+                            const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
+                            const audioBuffer = await audioResponse.arrayBuffer();
+                            
+                            if (audioBuffer.byteLength > 0) {
+                                return new NextResponse(audioBuffer, {
+                                    headers: {
+                                        'Content-Type': contentType,
+                                        'Content-Length': audioBuffer.byteLength.toString(),
+                                        'Cache-Control': 'public, max-age=3600',
+                                    },
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.log('[Audio] Direct API failed:', e);
+                    }
                 }
                 
-                try {
-                    // Fetch audio directly from ElevenLabs
-                    const audioResponse = await fetch(
-                        `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
-                        {
-                            headers: {
-                                'xi-api-key': apiKey,
-                            },
+                // Fallback to Pica passthrough
+                if (config.secretKey && config.connectionKey) {
+                    try {
+                        const audioResult = await getElevenLabsConversationAudio(config, conversationId);
+                        
+                        if (audioResult.audio_data && audioResult.audio_data.byteLength > 0) {
+                            return new NextResponse(audioResult.audio_data, {
+                                headers: {
+                                    'Content-Type': audioResult.content_type || 'audio/mpeg',
+                                    'Content-Length': audioResult.audio_data.byteLength.toString(),
+                                    'Cache-Control': 'public, max-age=3600',
+                                },
+                            });
                         }
-                    );
-                    
-                    if (!audioResponse.ok) {
-                        if (audioResponse.status === 404) {
-                            return NextResponse.json(
-                                { error: 'Audio recording not available for this conversation' },
-                                { status: 404 }
-                            );
+                        
+                        if (audioResult.audio_url) {
+                            const audioResponse = await fetch(audioResult.audio_url);
+                            if (audioResponse.ok) {
+                                const audioBuffer = await audioResponse.arrayBuffer();
+                                const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
+                                
+                                return new NextResponse(audioBuffer, {
+                                    headers: {
+                                        'Content-Type': contentType,
+                                        'Content-Length': audioBuffer.byteLength.toString(),
+                                        'Cache-Control': 'public, max-age=3600',
+                                    },
+                                });
+                            }
                         }
-                        const errorText = await audioResponse.text();
-                        return NextResponse.json(
-                            { error: `Failed to fetch audio: ${audioResponse.status}` },
-                            { status: audioResponse.status }
-                        );
+                    } catch (e) {
+                        console.log('[Audio] Pica passthrough failed:', e);
                     }
-                    
-                    const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
-                    const audioBuffer = await audioResponse.arrayBuffer();
-                    
-                    if (audioBuffer.byteLength === 0) {
-                        return NextResponse.json(
-                            { error: 'Empty audio response' },
-                            { status: 500 }
-                        );
-                    }
-                    
-                    return new NextResponse(audioBuffer, {
-                        headers: {
-                            'Content-Type': contentType,
-                            'Content-Length': audioBuffer.byteLength.toString(),
-                            'Cache-Control': 'public, max-age=3600',
-                        },
-                    });
-                } catch (error) {
-                    console.error('Audio fetch error:', error);
-                    return NextResponse.json(
-                        { error: error instanceof Error ? error.message : 'Failed to fetch audio' },
-                        { status: 500 }
-                    );
                 }
+                
+                return NextResponse.json(
+                    { error: 'Audio not available for this conversation' },
+                    { status: 404 }
+                );
             }
             
             case 'audio-url': {
