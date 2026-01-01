@@ -59,31 +59,29 @@ async function fetchElevenLabsData<T>(
     config: PicaElevenLabsConfig,
     options: { method?: string; body?: unknown; query?: Record<string, string | number>; pathParams?: Record<string, string> } = {}
 ): Promise<T> {
-    const url = new URL(`${PICA_BASE_URL}${endpoint}`);
+    // Replace path parameters in the endpoint URL
+    let finalEndpoint = endpoint;
+    if (options.pathParams) {
+        Object.entries(options.pathParams).forEach(([key, value]) => {
+            finalEndpoint = finalEndpoint.replace(`{{${key}}}`, value);
+        });
+    }
+    
+    const url = new URL(`${PICA_BASE_URL}${finalEndpoint}`);
     if (options.query) {
         Object.entries(options.query).forEach(([key, value]) => 
             url.searchParams.append(key, String(value))
         );
     }
 
-    // Build headers with path parameters for Pica
-    const headers: Record<string, string> = {
-        'x-pica-secret': config.secretKey,
-        'x-pica-connection-key': config.connectionKey,
-        'x-pica-action-id': actionId,
-        'Content-Type': 'application/json',
-    };
-    
-    // Add path parameters as x-pica-path-param-* headers
-    if (options.pathParams) {
-        Object.entries(options.pathParams).forEach(([key, value]) => {
-            headers[`x-pica-path-param-${key}`] = value;
-        });
-    }
-
     const resp = await fetch(url.toString(), {
         method: options.method || 'GET',
-        headers,
+        headers: {
+            'x-pica-secret': config.secretKey,
+            'x-pica-connection-key': config.connectionKey,
+            'x-pica-action-id': actionId,
+            'Content-Type': 'application/json',
+        },
         body: options.body ? JSON.stringify(options.body) : undefined,
     });
 
