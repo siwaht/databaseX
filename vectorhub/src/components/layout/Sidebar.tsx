@@ -17,6 +17,7 @@ import {
     Users,
     Key,
     Calendar,
+    Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +38,7 @@ const navItems = [
     { href: "/upload", icon: Upload, label: "Upload" },
     { href: "/search", icon: Search, label: "Search" },
     { href: "/bookings", icon: Calendar, label: "Bookings" },
+    { href: "/twilio", icon: Phone, label: "Twilio" },
 ];
 
 const bottomNavItems = [
