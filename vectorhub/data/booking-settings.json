@@ -2,6 +2,30 @@
   {
     "timezone": "GST",
     "brandColor": "#ee1b1b",
-    "id": "default"
+    "id": "default",
+    "availability": {
+      "Monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "Tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "Wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "Thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "Friday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "Saturday": null,
+      "Sunday": null
+    }
   }
 ]
