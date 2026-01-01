@@ -115,7 +115,7 @@ export async function getElevenLabsConversation(
     conversationId: string
 ): Promise<ElevenLabsConversationDetail> {
     return fetchElevenLabsData(
-        `/convai/conversations/${conversationId}`,
+        `/v1/convai/conversations/${conversationId}`,
         ELEVENLABS_ACTION_IDS.GET_CONVERSATION,
         config
     );
@@ -152,7 +152,7 @@ export async function sendElevenLabsFeedback(
     feedback: 'like' | 'dislike'
 ): Promise<Record<string, never>> {
     return fetchElevenLabsData(
-        `/convai/conversations/${conversationId}/feedback`,
+        `/v1/convai/conversations/${conversationId}/feedback`,
         ELEVENLABS_ACTION_IDS.SEND_FEEDBACK,
         config,
         { method: 'POST', body: { feedback } }
