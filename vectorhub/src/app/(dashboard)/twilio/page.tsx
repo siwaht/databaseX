@@ -381,6 +381,25 @@ export default function TwilioPage() {
 
                 {/* Transcriptions Tab */}
                 <TabsContent value="transcriptions" className="space-y-4">
+                    <Card className="border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-amber-500" />
+                                Where to find Recording SIDs
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground">
+                                Recording SIDs are created when you record Twilio calls. Find them in:
+                            </p>
+                            <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc list-inside">
+                                <li>Twilio Console → Monitor → Logs → Call Recordings</li>
+                                <li>Webhook callbacks when recordings complete</li>
+                                <li>Your application's database if you store them</li>
+                            </ul>
+                        </CardContent>
+                    </Card>
+
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-base">Fetch Call Transcriptions</CardTitle>
