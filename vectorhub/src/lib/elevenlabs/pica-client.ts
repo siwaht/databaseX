@@ -57,7 +57,7 @@ async function fetchElevenLabsData<T>(
     endpoint: string,
     actionId: string,
     config: PicaElevenLabsConfig,
-    options: { method?: string; body?: unknown; query?: Record<string, string | number> } = {}
+    options: { method?: string; body?: unknown; query?: Record<string, string | number>; pathParams?: Record<string, string> } = {}
 ): Promise<T> {
     const url = new URL(`${PICA_BASE_URL}${endpoint}`);
     if (options.query) {
@@ -66,14 +66,24 @@ async function fetchElevenLabsData<T>(
         );
     }
 
+    // Build headers with path parameters for Pica
+    const headers: Record<string, string> = {
+        'x-pica-secret': config.secretKey,
+        'x-pica-connection-key': config.connectionKey,
+        'x-pica-action-id': actionId,
+        'Content-Type': 'application/json',
+    };
+    
+    // Add path parameters as x-pica-path-param-* headers
+    if (options.pathParams) {
+        Object.entries(options.pathParams).forEach(([key, value]) => {
+            headers[`x-pica-path-param-${key}`] = value;
+        });
+    }
+
     const resp = await fetch(url.toString(), {
         method: options.method || 'GET',
-        headers: {
-            'x-pica-secret': config.secretKey,
-            'x-pica-connection-key': config.connectionKey,
-            'x-pica-action-id': actionId,
-            'Content-Type': 'application/json',
-        },
+        headers,
         body: options.body ? JSON.stringify(options.body) : undefined,
     });
 
@@ -115,9 +125,10 @@ export async function getElevenLabsConversation(
     conversationId: string
 ): Promise<ElevenLabsConversationDetail> {
     return fetchElevenLabsData(
-        `/v1/convai/conversations/${conversationId}`,
+        '/v1/convai/conversations/{{conversation_id}}',
         ELEVENLABS_ACTION_IDS.GET_CONVERSATION,
-        config
+        config,
+        { pathParams: { conversation_id: conversationId } }
     );
 }
 
@@ -127,9 +138,10 @@ export async function getElevenLabsConversationAudio(
     conversationId: string
 ): Promise<unknown> {
     return fetchElevenLabsData(
-        `/v1/convai/conversations/${conversationId}/audio`,
+        '/v1/convai/conversations/{{conversation_id}}/audio',
         ELEVENLABS_ACTION_IDS.GET_CONVERSATION_AUDIO,
-        config
+        config,
+        { pathParams: { conversation_id: conversationId } }
     );
 }
 
@@ -139,9 +151,10 @@ export async function getElevenLabsHistoryAudio(
     historyItemId: string
 ): Promise<{ abc: string | null }> {
     return fetchElevenLabsData(
-        `/history/${historyItemId}/audio`,
+        '/history/{{history_item_id}}/audio',
         ELEVENLABS_ACTION_IDS.GET_HISTORY_AUDIO,
-        config
+        config,
+        { pathParams: { history_item_id: historyItemId } }
     );
 }
 
@@ -152,9 +165,9 @@ export async function sendElevenLabsFeedback(
     feedback: 'like' | 'dislike'
 ): Promise<Record<string, never>> {
     return fetchElevenLabsData(
-        `/v1/convai/conversations/${conversationId}/feedback`,
+        '/v1/convai/conversations/{{conversation_id}}/feedback',
         ELEVENLABS_ACTION_IDS.SEND_FEEDBACK,
         config,
-        { method: 'POST', body: { feedback } }
+        { method: 'POST', body: { feedback }, pathParams: { conversation_id: conversationId } }
     );
 }
