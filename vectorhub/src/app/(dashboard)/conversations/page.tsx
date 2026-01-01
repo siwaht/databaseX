@@ -269,6 +269,7 @@ export default function ConversationsPage() {
     const [selectedElConversation, setSelectedElConversation] = useState<ElevenLabsConversationDetail | null>(null);
     const [elAudioUrl, setElAudioUrl] = useState<string | undefined>();
     const [elConnectionKey, setElConnectionKey] = useState('');
+    const [elApiKey, setElApiKey] = useState(''); // Direct ElevenLabs API key
     const [elFilter, setElFilter] = useState<'all' | 'success' | 'failure'>('all');
     
     // Twilio state
@@ -296,8 +297,13 @@ export default function ConversationsPage() {
         const savedSecret = localStorage.getItem('pica_secret_key');
         const savedElConnection = localStorage.getItem('pica_elevenlabs_connection_key');
         const savedTwilioConnection = localStorage.getItem('pica_twilio_connection_key');
+        const savedElApiKey = localStorage.getItem('elevenlabs_api_key');
         
         if (savedSecret) setPicaSecretKey(savedSecret);
+        if (savedElApiKey) {
+            setElApiKey(savedElApiKey);
+            setIsElConnected(true);
+        }
         if (savedElConnection) {
             setElConnectionKey(savedElConnection);
             setIsElConnected(true);
@@ -310,6 +316,10 @@ export default function ConversationsPage() {
 
     const saveConfig = () => {
         localStorage.setItem('pica_secret_key', picaSecretKey);
+        if (elApiKey) {
+            localStorage.setItem('elevenlabs_api_key', elApiKey);
+            setIsElConnected(true);
+        }
         if (elConnectionKey) {
             localStorage.setItem('pica_elevenlabs_connection_key', elConnectionKey);
             setIsElConnected(true);
@@ -319,12 +329,16 @@ export default function ConversationsPage() {
             setIsTwilioConnected(true);
         }
         setIsConfigOpen(false);
-        toast.success('Pica credentials saved');
+        toast.success('Credentials saved');
     };
 
     const testElevenLabsConnection = async () => {
-        if (!picaSecretKey || !elConnectionKey) {
-            toast.error('Please enter Pica Secret Key and ElevenLabs Connection Key');
+        // Check if we have direct API key or Pica keys
+        const hasDirect = !!elApiKey;
+        const hasPica = picaSecretKey && elConnectionKey;
+        
+        if (!hasDirect && !hasPica) {
+            toast.error('Please enter ElevenLabs API Key or Pica credentials');
             return;
         }
         setLoading(true);
@@ -332,11 +346,16 @@ export default function ConversationsPage() {
             const res = await fetch('/api/elevenlabs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'test', secretKey: picaSecretKey, connectionKey: elConnectionKey }),
+                body: JSON.stringify({ 
+                    action: 'test', 
+                    secretKey: picaSecretKey, 
+                    connectionKey: elConnectionKey,
+                    elevenLabsApiKey: elApiKey,
+                }),
             });
             const data = await res.json();
             if (data.success) {
-                toast.success('ElevenLabs connection successful!');
+                toast.success(`ElevenLabs connection successful! (${data.method})`);
                 saveConfig();
             } else {
                 toast.error(data.error || 'Connection failed');
@@ -391,6 +410,7 @@ export default function ConversationsPage() {
                 headers: {
                     'x-pica-secret': picaSecretKey,
                     'x-pica-connection-key': elConnectionKey,
+                    'x-elevenlabs-api-key': elApiKey,
                 },
             });
             const data = await res.json();
@@ -415,6 +435,7 @@ export default function ConversationsPage() {
                 headers: {
                     'x-pica-secret': picaSecretKey,
                     'x-pica-connection-key': elConnectionKey,
+                    'x-elevenlabs-api-key': elApiKey,
                 },
             });
             const data = await res.json();
@@ -429,6 +450,7 @@ export default function ConversationsPage() {
                         headers: {
                             'x-pica-secret': picaSecretKey,
                             'x-pica-connection-key': elConnectionKey,
+                            'x-elevenlabs-api-key': elApiKey,
                         },
                     });
                     const audioData = await audioRes.json();
@@ -455,6 +477,7 @@ export default function ConversationsPage() {
                     action: 'feedback',
                     secretKey: picaSecretKey,
                     connectionKey: elConnectionKey,
+                    elevenLabsApiKey: elApiKey,
                     conversationId,
                     feedback,
                 }),
@@ -895,35 +918,28 @@ export default function ConversationsPage() {
                     <DialogHeader>
                         <DialogTitle>Configure Pica Credentials</DialogTitle>
                         <DialogDescription>
-                            Enter your Pica API credentials from{' '}
-                            <a href="https://picaos.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                                picaos.com
-                            </a>
+                            Connect to ElevenLabs directly or via Pica passthrough
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label>Pica Secret Key (shared)</Label>
-                            <Input 
-                                type="password" 
-                                placeholder="Your Pica API secret key" 
-                                value={picaSecretKey} 
-                                onChange={(e) => setPicaSecretKey(e.target.value)} 
-                            />
-                        </div>
-                        
-                        <div className="border-t pt-4">
+                        <div className="border-b pb-4">
                             <p className="text-sm font-medium mb-3 flex items-center gap-2">
-                                <Mic className="h-4 w-4" /> ElevenLabs Connection
+                                <Mic className="h-4 w-4" /> ElevenLabs (Recommended: Direct API)
                             </p>
                             <div className="space-y-2">
-                                <Label>ElevenLabs Connection Key</Label>
+                                <Label>ElevenLabs API Key</Label>
                                 <Input 
                                     type="password" 
-                                    placeholder="Your ElevenLabs connection key" 
-                                    value={elConnectionKey} 
-                                    onChange={(e) => setElConnectionKey(e.target.value)} 
+                                    placeholder="xi-xxxxxxxx (from elevenlabs.io)" 
+                                    value={elApiKey} 
+                                    onChange={(e) => setElApiKey(e.target.value)} 
                                 />
+                                <p className="text-xs text-muted-foreground">
+                                    Get your API key from{' '}
+                                    <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                        elevenlabs.io/app/settings/api-keys
+                                    </a>
+                                </p>
                             </div>
                             <Button className="mt-2" size="sm" variant="outline" onClick={testElevenLabsConnection} disabled={loading}>
                                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
@@ -931,11 +947,20 @@ export default function ConversationsPage() {
                             </Button>
                         </div>
 
-                        <div className="border-t pt-4">
+                        <div className="border-b pb-4">
                             <p className="text-sm font-medium mb-3 flex items-center gap-2">
-                                <Phone className="h-4 w-4" /> Twilio Connection
+                                <Phone className="h-4 w-4" /> Twilio (via Pica)
                             </p>
                             <div className="space-y-2">
+                                <Label>Pica Secret Key</Label>
+                                <Input 
+                                    type="password" 
+                                    placeholder="Your Pica API secret key" 
+                                    value={picaSecretKey} 
+                                    onChange={(e) => setPicaSecretKey(e.target.value)} 
+                                />
+                            </div>
+                            <div className="space-y-2 mt-2">
                                 <Label>Twilio Connection Key</Label>
                                 <Input 
                                     type="password" 
@@ -949,6 +974,21 @@ export default function ConversationsPage() {
                                 Test Twilio
                             </Button>
                         </div>
+
+                        <details className="text-sm">
+                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                                Advanced: ElevenLabs via Pica (optional)
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                                <Label>ElevenLabs Pica Connection Key</Label>
+                                <Input 
+                                    type="password" 
+                                    placeholder="Your ElevenLabs connection key (Pica)" 
+                                    value={elConnectionKey} 
+                                    onChange={(e) => setElConnectionKey(e.target.value)} 
+                                />
+                            </div>
+                        </details>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsConfigOpen(false)}>Cancel</Button>

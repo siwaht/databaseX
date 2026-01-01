@@ -1,10 +1,11 @@
 /**
- * ElevenLabs Conversation API via Pica Passthrough
+ * ElevenLabs Conversation API - Direct API + Pica Passthrough support
  */
 
+const ELEVENLABS_API_URL = 'https://api.elevenlabs.io';
 const PICA_BASE_URL = 'https://api.picaos.com/v1/passthrough';
 
-// Action IDs for ElevenLabs endpoints
+// Action IDs for ElevenLabs endpoints via Pica
 export const ELEVENLABS_ACTION_IDS = {
     LIST_CONVERSATIONS: 'conn_mod_def::GCcb-oM9Wxk::S5TI7_cuQAS6oIbDcX6SXg',
     GET_CONVERSATION: 'conn_mod_def::GCcb-2-J_rw::qjRyRZbVRUeySosJocrT-w',
@@ -21,7 +22,8 @@ export interface ElevenLabsConversation {
     message_count: number;
     status: 'processing' | 'done';
     call_successful: 'success' | 'failure' | 'unknown';
-    agent_name: string;
+    agent_name?: string;
+    transcript_summary?: string;
 }
 
 export interface ElevenLabsTranscriptItem {
@@ -42,32 +44,58 @@ export interface ElevenLabsConversationDetail {
     feedback?: {
         score: 'like' | 'dislike';
     };
-    analysis: {
+    analysis?: {
         call_successful: 'success' | 'failure' | 'unknown';
-        transcript_summary: string;
+        transcript_summary?: string;
+        data_collection_results?: Record<string, unknown>;
     };
 }
 
 export interface PicaElevenLabsConfig {
     secretKey: string;
     connectionKey: string;
+    // Optional: direct ElevenLabs API key (bypasses Pica)
+    elevenLabsApiKey?: string;
 }
 
-async function fetchElevenLabsData<T>(
+// Direct ElevenLabs API call
+async function fetchElevenLabsDirect<T>(
+    endpoint: string,
+    apiKey: string,
+    options: { method?: string; body?: unknown; query?: Record<string, string | number> } = {}
+): Promise<T> {
+    const url = new URL(`${ELEVENLABS_API_URL}${endpoint}`);
+    if (options.query) {
+        Object.entries(options.query).forEach(([key, value]) => 
+            url.searchParams.append(key, String(value))
+        );
+    }
+
+    const resp = await fetch(url.toString(), {
+        method: options.method || 'GET',
+        headers: {
+            'xi-api-key': apiKey,
+            'Content-Type': 'application/json',
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+
+    if (!resp.ok) {
+        const errorText = await resp.text();
+        throw new Error(`ElevenLabs API error: ${resp.status} - ${errorText}`);
+    }
+
+    return resp.json();
+}
+
+// Pica Passthrough API call
+async function fetchElevenLabsPica<T>(
     endpoint: string,
     actionId: string,
     config: PicaElevenLabsConfig,
-    options: { method?: string; body?: unknown; query?: Record<string, string | number>; pathParams?: Record<string, string> } = {}
+    options: { method?: string; body?: unknown; query?: Record<string, string | number> } = {}
 ): Promise<T> {
-    // Replace path parameters in the endpoint URL
-    let finalEndpoint = endpoint;
-    if (options.pathParams) {
-        Object.entries(options.pathParams).forEach(([key, value]) => {
-            finalEndpoint = finalEndpoint.replace(`{{${key}}}`, value);
-        });
-    }
-    
-    const url = new URL(`${PICA_BASE_URL}${finalEndpoint}`);
+    const url = new URL(`${PICA_BASE_URL}${endpoint}`);
     if (options.query) {
         Object.entries(options.query).forEach(([key, value]) => 
             url.searchParams.append(key, String(value))
@@ -109,7 +137,16 @@ export async function listElevenLabsConversations(
     if (options.call_successful) query.call_successful = options.call_successful;
     if (options.page_size) query.page_size = options.page_size;
 
-    return fetchElevenLabsData(
+    // Use direct API if key provided, otherwise Pica
+    if (config.elevenLabsApiKey) {
+        return fetchElevenLabsDirect(
+            '/v1/convai/conversations',
+            config.elevenLabsApiKey,
+            { query }
+        );
+    }
+
+    return fetchElevenLabsPica(
         '/v1/convai/conversations',
         ELEVENLABS_ACTION_IDS.LIST_CONVERSATIONS,
         config,
@@ -122,11 +159,19 @@ export async function getElevenLabsConversation(
     config: PicaElevenLabsConfig,
     conversationId: string
 ): Promise<ElevenLabsConversationDetail> {
-    return fetchElevenLabsData(
-        '/v1/convai/conversations/{{conversation_id}}',
+    // Always use direct API for conversation details (Pica has issues with path params)
+    if (config.elevenLabsApiKey) {
+        return fetchElevenLabsDirect(
+            `/v1/convai/conversations/${conversationId}`,
+            config.elevenLabsApiKey
+        );
+    }
+    
+    // Fallback to Pica (may not work due to path param issues)
+    return fetchElevenLabsPica(
+        `/v1/convai/conversations/${conversationId}`,
         ELEVENLABS_ACTION_IDS.GET_CONVERSATION,
-        config,
-        { pathParams: { conversation_id: conversationId } }
+        config
     );
 }
 
@@ -134,25 +179,18 @@ export async function getElevenLabsConversation(
 export async function getElevenLabsConversationAudio(
     config: PicaElevenLabsConfig,
     conversationId: string
-): Promise<unknown> {
-    return fetchElevenLabsData(
-        '/v1/convai/conversations/{{conversation_id}}/audio',
+): Promise<{ audio_url?: string }> {
+    if (config.elevenLabsApiKey) {
+        return fetchElevenLabsDirect(
+            `/v1/convai/conversations/${conversationId}/audio`,
+            config.elevenLabsApiKey
+        );
+    }
+    
+    return fetchElevenLabsPica(
+        `/v1/convai/conversations/${conversationId}/audio`,
         ELEVENLABS_ACTION_IDS.GET_CONVERSATION_AUDIO,
-        config,
-        { pathParams: { conversation_id: conversationId } }
-    );
-}
-
-// Get audio from history item
-export async function getElevenLabsHistoryAudio(
-    config: PicaElevenLabsConfig,
-    historyItemId: string
-): Promise<{ abc: string | null }> {
-    return fetchElevenLabsData(
-        '/history/{{history_item_id}}/audio',
-        ELEVENLABS_ACTION_IDS.GET_HISTORY_AUDIO,
-        config,
-        { pathParams: { history_item_id: historyItemId } }
+        config
     );
 }
 
@@ -162,10 +200,18 @@ export async function sendElevenLabsFeedback(
     conversationId: string,
     feedback: 'like' | 'dislike'
 ): Promise<Record<string, never>> {
-    return fetchElevenLabsData(
-        '/v1/convai/conversations/{{conversation_id}}/feedback',
+    if (config.elevenLabsApiKey) {
+        return fetchElevenLabsDirect(
+            `/v1/convai/conversations/${conversationId}/feedback`,
+            config.elevenLabsApiKey,
+            { method: 'POST', body: { feedback } }
+        );
+    }
+    
+    return fetchElevenLabsPica(
+        `/v1/convai/conversations/${conversationId}/feedback`,
         ELEVENLABS_ACTION_IDS.SEND_FEEDBACK,
         config,
-        { method: 'POST', body: { feedback }, pathParams: { conversation_id: conversationId } }
+        { method: 'POST', body: { feedback } }
     );
 }

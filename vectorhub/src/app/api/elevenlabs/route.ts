@@ -7,24 +7,26 @@ import {
     PicaElevenLabsConfig,
 } from "@/lib/elevenlabs/pica-client";
 
-function getConfig(secretKey?: string, connectionKey?: string): PicaElevenLabsConfig {
+function getConfig(request: Request): PicaElevenLabsConfig {
     return {
-        secretKey: secretKey || process.env.PICA_SECRET_KEY || '',
-        connectionKey: connectionKey || process.env.PICA_ELEVENLABS_CONNECTION_KEY || '',
+        secretKey: request.headers.get('x-pica-secret') || process.env.PICA_SECRET_KEY || '',
+        connectionKey: request.headers.get('x-pica-connection-key') || process.env.PICA_ELEVENLABS_CONNECTION_KEY || '',
+        elevenLabsApiKey: request.headers.get('x-elevenlabs-api-key') || process.env.ELEVENLABS_API_KEY || '',
     };
 }
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
-    
-    const secretKey = request.headers.get('x-pica-secret') || undefined;
-    const connectionKey = request.headers.get('x-pica-connection-key') || undefined;
-    const config = getConfig(secretKey, connectionKey);
+    const config = getConfig(request);
 
-    if (!config.secretKey || !config.connectionKey) {
+    // Check if we have either Pica or direct ElevenLabs credentials
+    const hasPica = config.secretKey && config.connectionKey;
+    const hasDirect = !!config.elevenLabsApiKey;
+    
+    if (!hasPica && !hasDirect) {
         return NextResponse.json(
-            { error: 'Pica credentials not configured. Set PICA_SECRET_KEY and PICA_ELEVENLABS_CONNECTION_KEY.' },
+            { error: 'Credentials not configured. Provide either Pica keys or ElevenLabs API key.' },
             { status: 400 }
         );
     }
@@ -66,12 +68,13 @@ export async function GET(request: Request) {
 
             default:
                 return NextResponse.json({
-                    message: 'ElevenLabs Conversation API via Pica Passthrough',
+                    message: 'ElevenLabs Conversation API',
                     availableActions: [
                         'conversations - List all conversations',
                         'conversation - Get conversation details with transcript (requires id)',
                         'audio - Get conversation audio (requires id)',
                     ],
+                    note: 'Supports both Pica passthrough and direct ElevenLabs API',
                 });
         }
     } catch (error) {
@@ -86,13 +89,20 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { action, secretKey, connectionKey, conversationId, feedback } = body;
+        const { action, secretKey, connectionKey, elevenLabsApiKey, conversationId, feedback } = body;
 
-        const config = getConfig(secretKey, connectionKey);
+        const config: PicaElevenLabsConfig = {
+            secretKey: secretKey || '',
+            connectionKey: connectionKey || '',
+            elevenLabsApiKey: elevenLabsApiKey || '',
+        };
 
-        if (!config.secretKey || !config.connectionKey) {
+        const hasPica = config.secretKey && config.connectionKey;
+        const hasDirect = !!config.elevenLabsApiKey;
+
+        if (!hasPica && !hasDirect) {
             return NextResponse.json(
-                { error: 'secretKey and connectionKey required' },
+                { error: 'Provide either Pica keys or ElevenLabs API key' },
                 { status: 400 }
             );
         }
@@ -104,6 +114,7 @@ export async function POST(request: Request) {
                 success: true,
                 message: 'Connection successful',
                 conversationCount: data.conversations?.length || 0,
+                method: hasDirect ? 'direct' : 'pica',
             });
         }
 
