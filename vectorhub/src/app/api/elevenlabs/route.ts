@@ -75,29 +75,64 @@ export async function GET(request: Request) {
                     return NextResponse.json({ error: 'ElevenLabs API key required for audio' }, { status: 400 });
                 }
                 
-                const audioResponse = await fetch(
-                    `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
-                    {
-                        headers: {
-                            'xi-api-key': apiKey,
-                        },
+                // Retry logic for audio fetch
+                let lastError: Error | null = null;
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const audioResponse = await fetch(
+                            `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
+                            {
+                                headers: {
+                                    'xi-api-key': apiKey,
+                                },
+                            }
+                        );
+                        
+                        if (!audioResponse.ok) {
+                            const errorText = await audioResponse.text();
+                            // If 404, audio doesn't exist - don't retry
+                            if (audioResponse.status === 404) {
+                                return NextResponse.json(
+                                    { error: 'Audio recording not available for this conversation' }, 
+                                    { status: 404 }
+                                );
+                            }
+                            throw new Error(`Audio fetch failed: ${audioResponse.status} - ${errorText}`);
+                        }
+                        
+                        // Get content type from response or default to audio/mpeg
+                        const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
+                        const contentLength = audioResponse.headers.get('content-length');
+                        
+                        // Return the audio as a stream with proper headers for browser playback
+                        const audioBuffer = await audioResponse.arrayBuffer();
+                        
+                        const headers: Record<string, string> = {
+                            'Content-Type': contentType,
+                            'Accept-Ranges': 'bytes',
+                            'Cache-Control': 'public, max-age=3600',
+                            'Access-Control-Allow-Origin': '*',
+                        };
+                        
+                        if (contentLength) {
+                            headers['Content-Length'] = contentLength;
+                        }
+                        
+                        return new NextResponse(audioBuffer, { headers });
+                    } catch (error) {
+                        lastError = error instanceof Error ? error : new Error('Unknown error');
+                        // Wait before retry (exponential backoff)
+                        if (attempt < 2) {
+                            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                        }
                     }
-                );
-                
-                if (!audioResponse.ok) {
-                    const errorText = await audioResponse.text();
-                    return NextResponse.json({ error: `Audio fetch failed: ${errorText}` }, { status: audioResponse.status });
                 }
                 
-                // Return the audio as a stream with proper headers for browser playback
-                const audioBuffer = await audioResponse.arrayBuffer();
-                return new NextResponse(audioBuffer, {
-                    headers: {
-                        'Content-Type': 'audio/mpeg',
-                        'Accept-Ranges': 'bytes',
-                        'Cache-Control': 'public, max-age=3600',
-                    },
-                });
+                // All retries failed
+                return NextResponse.json(
+                    { error: lastError?.message || 'Failed to fetch audio after multiple attempts' }, 
+                    { status: 500 }
+                );
             }
             
             case 'audio-url': {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
     MessageSquare,
     Phone,
@@ -22,7 +22,12 @@ import {
     Download,
     History,
     BarChart3,
-    X,
+    TrendingUp,
+    TrendingDown,
+    Activity,
+    PhoneCall,
+    Timer,
+    LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,11 +53,22 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Progress } from "@/components/ui/progress";
 import { TwilioConversation, TwilioMessage, TwilioTranscription } from "@/lib/twilio/pica-client";
 import { ElevenLabsConversation, ElevenLabsConversationDetail, ElevenLabsAgent } from "@/lib/elevenlabs/pica-client";
 
-// Audio Player Component
-function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) {
+// Audio Player Component with retry fallback
+function AudioPlayer({ 
+    audioUrl, 
+    title,
+    onRetry,
+    conversationId,
+}: { 
+    audioUrl: string; 
+    title?: string;
+    onRetry?: () => void;
+    conversationId?: string;
+}) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -60,6 +76,24 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
     const [volume, setVolume] = useState(1);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [retryCount, setRetryCount] = useState(0);
+    const maxRetries = 3;
+
+    const handleRetry = () => {
+        if (retryCount < maxRetries) {
+            setRetryCount(prev => prev + 1);
+            setError(null);
+            setIsLoading(true);
+            // Force reload by updating the audio src
+            if (audioRef.current) {
+                audioRef.current.load();
+            }
+        } else if (onRetry) {
+            // Call parent retry handler for alternative fetch method
+            setRetryCount(0);
+            onRetry();
+        }
+    };
 
     const togglePlay = () => {
         if (audioRef.current && !error) {
@@ -86,12 +120,23 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
             setDuration(audioRef.current.duration);
             setIsLoading(false);
             setError(null);
+            setRetryCount(0);
         }
     };
 
     const handleError = () => {
-        setError('Audio not available or failed to load');
-        setIsLoading(false);
+        // Auto-retry on first few failures
+        if (retryCount < maxRetries) {
+            setTimeout(() => {
+                setRetryCount(prev => prev + 1);
+                if (audioRef.current) {
+                    audioRef.current.load();
+                }
+            }, 1000 * (retryCount + 1)); // Exponential backoff
+        } else {
+            setError('Audio not available or failed to load');
+            setIsLoading(false);
+        }
     };
 
     const handleCanPlay = () => {
@@ -122,10 +167,21 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
     if (error) {
         return (
             <div className="bg-destructive/10 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-destructive">
-                    <Volume2 className="h-4 w-4" />
-                    <span className="text-sm">{error}</span>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-destructive">
+                        <Volume2 className="h-4 w-4" />
+                        <span className="text-sm">{error}</span>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={handleRetry}>
+                        <RefreshCw className="mr-2 h-3 w-3" />
+                        {retryCount >= maxRetries ? 'Try Alternative' : 'Retry'}
+                    </Button>
                 </div>
+                {retryCount > 0 && retryCount < maxRetries && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                        Retry attempt {retryCount}/{maxRetries}...
+                    </p>
+                )}
             </div>
         );
     }
@@ -140,8 +196,16 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
                 onEnded={() => setIsPlaying(false)}
                 onError={handleError}
                 onCanPlay={handleCanPlay}
+                preload="metadata"
             />
-            {title && <p className="text-sm font-medium">{title}</p>}
+            {title && (
+                <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{title}</p>
+                    {isLoading && retryCount > 0 && (
+                        <span className="text-xs text-muted-foreground">Retrying ({retryCount}/{maxRetries})...</span>
+                    )}
+                </div>
+            )}
             <div className="flex items-center gap-3">
                 <Button size="icon" variant="outline" onClick={togglePlay} disabled={isLoading}>
                     {isLoading ? (
@@ -194,6 +258,7 @@ function ConversationDetailDialog({
     audioUrl,
     onLoadAudio,
     loadingAudio,
+    onRetryAudio,
 }: {
     conversation: ElevenLabsConversationDetail | null;
     onClose: () => void;
@@ -201,6 +266,7 @@ function ConversationDetailDialog({
     audioUrl?: string;
     onLoadAudio?: () => void;
     loadingAudio?: boolean;
+    onRetryAudio?: () => void;
 }) {
     if (!conversation) return null;
 
@@ -278,7 +344,12 @@ function ConversationDetailDialog({
 
                     {/* Audio Player */}
                     {audioUrl ? (
-                        <AudioPlayer audioUrl={audioUrl} title="Call Recording" />
+                        <AudioPlayer 
+                            audioUrl={audioUrl} 
+                            title="Call Recording" 
+                            onRetry={onRetryAudio}
+                            conversationId={conversation.conversation_id}
+                        />
                     ) : onLoadAudio ? (
                         <Card className="p-4">
                             <div className="flex items-center justify-between">
@@ -358,6 +429,9 @@ function ConversationDetailDialog({
 }
 
 export default function ConversationsPage() {
+    // Main tab selection
+    const [mainTab, setMainTab] = useState<'dashboard' | 'conversations'>('dashboard');
+    
     // Provider selection
     const [provider, setProvider] = useState<'elevenlabs' | 'twilio'>('elevenlabs');
     
@@ -583,7 +657,10 @@ export default function ConversationsPage() {
         }
     };
 
-    const loadElAudio = async () => {
+    // Audio fetch method tracking
+    const [audioFetchMethod, setAudioFetchMethod] = useState<'proxy' | 'blob'>('proxy');
+
+    const loadElAudio = async (useAlternative = false) => {
         if (!selectedElConversation) return;
         if (!elApiKey) {
             toast.error('ElevenLabs API key required for audio playback');
@@ -591,16 +668,51 @@ export default function ConversationsPage() {
             return;
         }
         setLoadingAudio(true);
+        
+        const conversationId = selectedElConversation.conversation_id;
+        
         try {
-            // Set the audio URL directly - the AudioPlayer will handle errors gracefully
-            const audioUrl = `/api/elevenlabs?action=audio&id=${selectedElConversation.conversation_id}&apiKey=${encodeURIComponent(elApiKey)}`;
-            setElAudioUrl(audioUrl);
-            toast.success('Audio player loaded');
-        } catch {
-            toast.error('Failed to load audio');
+            if (useAlternative || audioFetchMethod === 'blob') {
+                // Alternative method: Fetch as blob and create object URL
+                setAudioFetchMethod('blob');
+                toast.info('Trying alternative audio fetch method...');
+                
+                const response = await fetch(
+                    `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}`
+                );
+                
+                if (!response.ok) {
+                    throw new Error(`Audio fetch failed: ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                setElAudioUrl(blobUrl);
+                toast.success('Audio loaded via blob');
+            } else {
+                // Primary method: Direct URL (browser handles streaming)
+                setAudioFetchMethod('proxy');
+                const audioUrl = `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`;
+                setElAudioUrl(audioUrl);
+                toast.success('Audio player loaded');
+            }
+        } catch (error) {
+            console.error('Audio load error:', error);
+            if (!useAlternative && audioFetchMethod === 'proxy') {
+                // Try alternative method
+                toast.info('Primary method failed, trying alternative...');
+                loadElAudio(true);
+            } else {
+                toast.error('Failed to load audio. The recording may not be available.');
+            }
         } finally {
             setLoadingAudio(false);
         }
+    };
+
+    const retryAudioWithAlternative = () => {
+        setElAudioUrl(undefined);
+        loadElAudio(true);
     };
 
     const sendFeedback = async (conversationId: string, feedback: 'like' | 'dislike') => {
@@ -734,6 +846,71 @@ export default function ConversationsPage() {
 
     const isConnected = provider === 'elevenlabs' ? isElConnected : isTwilioConnected;
 
+    // Calculate analytics from conversations
+    const analytics = useMemo(() => {
+        const totalCalls = elConversations.length;
+        const successfulCalls = elConversations.filter(c => c.call_successful === 'success').length;
+        const failedCalls = elConversations.filter(c => c.call_successful === 'failure').length;
+        const totalDuration = elConversations.reduce((acc, c) => acc + c.call_duration_secs, 0);
+        const avgDuration = totalCalls > 0 ? totalDuration / totalCalls : 0;
+        const totalMessages = elConversations.reduce((acc, c) => acc + c.message_count, 0);
+        const avgMessages = totalCalls > 0 ? totalMessages / totalCalls : 0;
+        const successRate = totalCalls > 0 ? (successfulCalls / totalCalls) * 100 : 0;
+        
+        // Group by agent
+        const byAgent = elConversations.reduce((acc, c) => {
+            const agentName = c.agent_name || 'Unknown Agent';
+            if (!acc[agentName]) {
+                acc[agentName] = { total: 0, success: 0, failed: 0, duration: 0 };
+            }
+            acc[agentName].total++;
+            if (c.call_successful === 'success') acc[agentName].success++;
+            if (c.call_successful === 'failure') acc[agentName].failed++;
+            acc[agentName].duration += c.call_duration_secs;
+            return acc;
+        }, {} as Record<string, { total: number; success: number; failed: number; duration: number }>);
+
+        // Group by date (last 7 days)
+        const last7Days = Array.from({ length: 7 }, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (6 - i));
+            return date.toISOString().split('T')[0];
+        });
+        
+        const byDate = last7Days.map(date => {
+            const dayConvs = elConversations.filter(c => {
+                const convDate = new Date(c.start_time_unix_secs * 1000).toISOString().split('T')[0];
+                return convDate === date;
+            });
+            return {
+                date,
+                label: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+                total: dayConvs.length,
+                success: dayConvs.filter(c => c.call_successful === 'success').length,
+                failed: dayConvs.filter(c => c.call_successful === 'failure').length,
+            };
+        });
+
+        // Twilio analytics
+        const twilioTotal = twilioConversations.length;
+        const twilioActive = twilioConversations.filter(c => c.state === 'active').length;
+
+        return {
+            totalCalls,
+            successfulCalls,
+            failedCalls,
+            totalDuration,
+            avgDuration,
+            totalMessages,
+            avgMessages,
+            successRate,
+            byAgent,
+            byDate,
+            twilioTotal,
+            twilioActive,
+        };
+    }, [elConversations, twilioConversations]);
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -771,7 +948,227 @@ export default function ConversationsPage() {
                 </div>
             </div>
 
-            {/* ElevenLabs Content */}
+            {/* Main Tabs */}
+            <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'dashboard' | 'conversations')}>
+                <TabsList className="grid w-full grid-cols-2 lg:w-[300px]">
+                    <TabsTrigger value="dashboard">
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        Dashboard
+                    </TabsTrigger>
+                    <TabsTrigger value="conversations">
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Conversations
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* Dashboard Tab */}
+                <TabsContent value="dashboard" className="space-y-6">
+                    {/* Summary Cards */}
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
+                                <PhoneCall className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{analytics.totalCalls}</div>
+                                <p className="text-xs text-muted-foreground">
+                                    {analytics.totalMessages} total messages
+                                </p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+                                <Activity className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{analytics.successRate.toFixed(1)}%</div>
+                                <Progress value={analytics.successRate} className="mt-2" />
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
+                                <Timer className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">
+                                    {Math.floor(analytics.avgDuration / 60)}:{Math.floor(analytics.avgDuration % 60).toString().padStart(2, '0')}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    {Math.floor(analytics.totalDuration / 60)} min total
+                                </p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Call Outcomes</CardTitle>
+                                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-1">
+                                        <TrendingUp className="h-4 w-4 text-green-500" />
+                                        <span className="text-sm font-medium">{analytics.successfulCalls}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <TrendingDown className="h-4 w-4 text-red-500" />
+                                        <span className="text-sm font-medium">{analytics.failedCalls}</span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Success / Failed
+                                </p>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Charts Row */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {/* Daily Activity */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base">Daily Activity (Last 7 Days)</CardTitle>
+                                <CardDescription>Call volume and success rate by day</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    {analytics.byDate.map((day) => (
+                                        <div key={day.date} className="flex items-center gap-3">
+                                            <span className="w-10 text-sm text-muted-foreground">{day.label}</span>
+                                            <div className="flex-1 flex items-center gap-1 h-6">
+                                                {day.total > 0 ? (
+                                                    <>
+                                                        <div 
+                                                            className="h-full bg-green-500 rounded-l"
+                                                            style={{ width: `${(day.success / Math.max(...analytics.byDate.map(d => d.total), 1)) * 100}%` }}
+                                                        />
+                                                        <div 
+                                                            className="h-full bg-red-500 rounded-r"
+                                                            style={{ width: `${(day.failed / Math.max(...analytics.byDate.map(d => d.total), 1)) * 100}%` }}
+                                                        />
+                                                    </>
+                                                ) : (
+                                                    <div className="h-full w-full bg-muted rounded" />
+                                                )}
+                                            </div>
+                                            <span className="w-8 text-sm text-right">{day.total}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-4 mt-4 text-xs">
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-3 h-3 bg-green-500 rounded" />
+                                        <span>Success</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-3 h-3 bg-red-500 rounded" />
+                                        <span>Failed</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* By Agent */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base">Performance by Agent</CardTitle>
+                                <CardDescription>Call distribution across agents</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <ScrollArea className="h-[200px]">
+                                    <div className="space-y-4">
+                                        {Object.entries(analytics.byAgent).length > 0 ? (
+                                            Object.entries(analytics.byAgent).map(([agent, stats]) => (
+                                                <div key={agent} className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-sm font-medium truncate max-w-[150px]">{agent}</span>
+                                                        <span className="text-sm text-muted-foreground">{stats.total} calls</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Progress 
+                                                            value={stats.total > 0 ? (stats.success / stats.total) * 100 : 0} 
+                                                            className="flex-1"
+                                                        />
+                                                        <span className="text-xs text-muted-foreground w-12">
+                                                            {stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(0) : 0}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                        <span>Avg: {Math.floor(stats.duration / stats.total / 60)}:{Math.floor((stats.duration / stats.total) % 60).toString().padStart(2, '0')}</span>
+                                                        <span>✓ {stats.success}</span>
+                                                        <span>✗ {stats.failed}</span>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-muted-foreground py-8">
+                                                <Mic className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                <p className="text-sm">No agent data available</p>
+                                                <p className="text-xs">Load conversations to see analytics</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </ScrollArea>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Twilio Stats */}
+                    {twilioConversations.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Phone className="h-4 w-4" />
+                                    Twilio / WhatsApp
+                                </CardTitle>
+                                <CardDescription>Message conversations from Twilio</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid gap-4 md:grid-cols-3">
+                                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                                        <div className="text-2xl font-bold">{analytics.twilioTotal}</div>
+                                        <p className="text-sm text-muted-foreground">Total Conversations</p>
+                                    </div>
+                                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                                        <div className="text-2xl font-bold text-green-600">{analytics.twilioActive}</div>
+                                        <p className="text-sm text-muted-foreground">Active</p>
+                                    </div>
+                                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                                        <div className="text-2xl font-bold">{analytics.twilioTotal - analytics.twilioActive}</div>
+                                        <p className="text-sm text-muted-foreground">Closed</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Quick Actions */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Quick Actions</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex flex-wrap gap-2">
+                            <Button variant="outline" size="sm" onClick={fetchElConversations} disabled={loading}>
+                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                                Refresh ElevenLabs
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={fetchTwilioConversations} disabled={loading}>
+                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                                Refresh Twilio
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setMainTab('conversations')}>
+                                <MessageSquare className="mr-2 h-4 w-4" />
+                                View Conversations
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Conversations Tab */}
+                <TabsContent value="conversations" className="space-y-4">
+                    {/* ElevenLabs Content */}
             {provider === 'elevenlabs' && (
                 <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1054,6 +1451,8 @@ export default function ConversationsPage() {
                     </TabsContent>
                 </Tabs>
             )}
+                </TabsContent>
+            </Tabs>
 
             {/* ElevenLabs Conversation Detail Dialog */}
             <ConversationDetailDialog
@@ -1061,11 +1460,13 @@ export default function ConversationsPage() {
                 onClose={() => {
                     setSelectedElConversation(null);
                     setElAudioUrl(undefined);
+                    setAudioFetchMethod('proxy');
                 }}
                 onFeedback={sendFeedback}
                 audioUrl={elAudioUrl}
-                onLoadAudio={loadElAudio}
+                onLoadAudio={() => loadElAudio()}
                 loadingAudio={loadingAudio}
+                onRetryAudio={retryAudioWithAlternative}
             />
 
             {/* Configuration Dialog */}
