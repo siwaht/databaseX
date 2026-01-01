@@ -314,26 +314,32 @@ export default function TwilioPage() {
                         <CardHeader>
                             <CardTitle className="text-base">Fetch Channel Messages</CardTitle>
                             <CardDescription>
-                                Enter the Service SID and Channel SID to load messages
+                                Enter the Twilio Chat Service SID and Channel SID to load messages
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Service SID</Label>
+                                    <Label>Chat Service SID</Label>
                                     <Input
                                         placeholder="ISxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                         value={serviceSid}
                                         onChange={(e) => setServiceSid(e.target.value)}
                                     />
+                                    <p className="text-xs text-muted-foreground">
+                                        Starts with IS, from Twilio Conversations
+                                    </p>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Channel SID</Label>
+                                    <Label>Channel/Conversation SID</Label>
                                     <Input
                                         placeholder="CHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                         value={channelSid}
                                         onChange={(e) => setChannelSid(e.target.value)}
                                     />
+                                    <p className="text-xs text-muted-foreground">
+                                        Starts with CH, or use conversation SID
+                                    </p>
                                 </div>
                             </div>
                             <Button onClick={fetchMessages} disabled={loading}>
@@ -379,26 +385,32 @@ export default function TwilioPage() {
                         <CardHeader>
                             <CardTitle className="text-base">Fetch Call Transcriptions</CardTitle>
                             <CardDescription>
-                                Enter the Account SID and Recording SID to load transcriptions
+                                Enter the Twilio Account SID and Recording SID to load transcriptions
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Account SID</Label>
+                                    <Label>Twilio Account SID</Label>
                                     <Input
                                         placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                         value={accountSid}
                                         onChange={(e) => setAccountSid(e.target.value)}
                                     />
+                                    <p className="text-xs text-muted-foreground">
+                                        Found in your Twilio Console dashboard
+                                    </p>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Recording SID</Label>
+                                    <Label>Twilio Recording SID</Label>
                                     <Input
                                         placeholder="RExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                         value={recordingSid}
                                         onChange={(e) => setRecordingSid(e.target.value)}
                                     />
+                                    <p className="text-xs text-muted-foreground">
+                                        Starts with RE, from call recordings
+                                    </p>
                                 </div>
                             </div>
                             <Button onClick={fetchTranscriptions} disabled={loading}>
@@ -447,7 +459,8 @@ export default function TwilioPage() {
                     <DialogHeader>
                         <DialogTitle>Configure Pica Credentials</DialogTitle>
                         <DialogDescription>
-                            Enter your Pica API credentials to connect to Twilio via Passthrough
+                            Enter your Pica API credentials to connect to Twilio via Passthrough.
+                            Get these from <a href="https://picaos.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">picaos.com</a>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -455,19 +468,25 @@ export default function TwilioPage() {
                             <Label>Pica Secret Key</Label>
                             <Input
                                 type="password"
-                                placeholder="pica_secret_..."
+                                placeholder="Your Pica API secret key"
                                 value={picaSecretKey}
                                 onChange={(e) => setPicaSecretKey(e.target.value)}
                             />
+                            <p className="text-xs text-muted-foreground">
+                                Found in your Pica dashboard under API Keys
+                            </p>
                         </div>
                         <div className="space-y-2">
                             <Label>Pica Twilio Connection Key</Label>
                             <Input
                                 type="password"
-                                placeholder="pica_conn_..."
+                                placeholder="Your Twilio connection key from Pica"
                                 value={picaConnectionKey}
                                 onChange={(e) => setPicaConnectionKey(e.target.value)}
                             />
+                            <p className="text-xs text-muted-foreground">
+                                Created when you connect Twilio in Pica
+                            </p>
                         </div>
                     </div>
                     <DialogFooter>
