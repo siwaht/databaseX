@@ -109,6 +109,7 @@ export default function BookingsPage() {
     });
     // Availability State
     const [availability, setAvailability] = useState<{ [day: string]: { start: string; end: string } | null }>({});
+    const [is24x7, setIs24x7] = useState(false);
     const [editingDay, setEditingDay] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -181,6 +182,9 @@ export default function BookingsPage() {
                     const settings = await settingsRes.json();
                     if (settings.availability) {
                         setAvailability(settings.availability);
+                    }
+                    if (settings.is24x7 !== undefined) {
+                        setIs24x7(settings.is24x7);
                     }
                 }
                 if (leadsRes.ok) {
@@ -445,6 +449,29 @@ export default function BookingsPage() {
         } catch (error) {
             toast.error("Failed to save availability");
             // Revert on error could be added here
+        }
+    };
+
+    const handle24x7Toggle = async (enabled: boolean) => {
+        setIs24x7(enabled);
+        try {
+            const settingsRes = await fetch('/api/bookings/settings');
+            const currentSettings = settingsRes.ok ? await settingsRes.json() : {};
+
+            const res = await fetch('/api/bookings/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...currentSettings,
+                    is24x7: enabled,
+                }),
+            });
+
+            if (!res.ok) throw new Error("Failed to save");
+            toast.success(enabled ? "24/7 availability enabled" : "24/7 availability disabled");
+        } catch (error) {
+            setIs24x7(!enabled); // Revert on error
+            toast.error("Failed to update availability mode");
         }
     };
 
@@ -762,11 +789,37 @@ export default function BookingsPage() {
                 </TabsContent>
 
                 <TabsContent value="availability" className="space-y-4">
-                    <Card>
+                    {/* 24/7 Toggle Card */}
+                    <Card className={is24x7 ? "border-green-500/30 bg-gradient-to-br from-green-500/5 to-transparent" : ""}>
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-base">24/7 Availability</CardTitle>
+                                    <CardDescription>
+                                        Accept bookings at any time, any day
+                                    </CardDescription>
+                                </div>
+                                <Switch 
+                                    checked={is24x7} 
+                                    onCheckedChange={handle24x7Toggle}
+                                />
+                            </div>
+                        </CardHeader>
+                        {is24x7 && (
+                            <CardContent className="pt-0">
+                                <p className="text-sm text-green-600">
+                                    Bookings are available 24 hours a day, 7 days a week. Working hours below are ignored.
+                                </p>
+                            </CardContent>
+                        )}
+                    </Card>
+
+                    {/* Working Hours Card */}
+                    <Card className={is24x7 ? "opacity-50" : ""}>
                         <CardHeader>
                             <CardTitle>Working Hours</CardTitle>
                             <CardDescription>
-                                Set your default weekly working hours.
+                                {is24x7 ? "These hours are ignored when 24/7 mode is enabled." : "Set your default weekly working hours."}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 sm:space-y-6">
@@ -784,7 +837,7 @@ export default function BookingsPage() {
                                             <span className="text-xs sm:text-sm text-muted-foreground italic">Unavailable</span>
                                         )}
                                     </div>
-                                    <Button variant="ghost" size="sm" onClick={() => handleEditAvailability(day)}>Edit</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => handleEditAvailability(day)} disabled={is24x7}>Edit</Button>
                                 </div>
                             ))}
                         </CardContent>
