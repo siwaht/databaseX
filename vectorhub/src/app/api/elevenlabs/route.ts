@@ -71,72 +71,57 @@ export async function GET(request: Request) {
                     return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
                 }
                 
-                // Try using the pica-client function which handles both direct and Pica methods
+                const apiKey = config.elevenLabsApiKey;
+                if (!apiKey) {
+                    return NextResponse.json({ error: 'ElevenLabs API key required for audio' }, { status: 400 });
+                }
+                
                 try {
-                    const audioResult = await getElevenLabsConversationAudio(config, conversationId);
-                    
-                    // If we got binary audio data directly
-                    if (audioResult.audio_data) {
-                        return new NextResponse(audioResult.audio_data, {
+                    // Fetch audio directly from ElevenLabs
+                    const audioResponse = await fetch(
+                        `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
+                        {
                             headers: {
-                                'Content-Type': audioResult.content_type || 'audio/mpeg',
-                                'Content-Length': audioResult.audio_data.byteLength.toString(),
-                                'Accept-Ranges': 'bytes',
-                                'Cache-Control': 'public, max-age=3600',
-                                'Access-Control-Allow-Origin': '*',
+                                'xi-api-key': apiKey,
                             },
-                        });
-                    }
+                        }
+                    );
                     
-                    // If we got an audio URL, fetch the audio from it
-                    if (audioResult.audio_url) {
-                        const audioResponse = await fetch(audioResult.audio_url);
-                        
-                        if (!audioResponse.ok) {
+                    if (!audioResponse.ok) {
+                        if (audioResponse.status === 404) {
                             return NextResponse.json(
-                                { error: `Failed to fetch audio from URL: ${audioResponse.status}` },
-                                { status: 500 }
+                                { error: 'Audio recording not available for this conversation' },
+                                { status: 404 }
                             );
                         }
-                        
-                        const audioBuffer = await audioResponse.arrayBuffer();
-                        const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
-                        
-                        return new NextResponse(audioBuffer, {
-                            headers: {
-                                'Content-Type': contentType,
-                                'Content-Length': audioBuffer.byteLength.toString(),
-                                'Accept-Ranges': 'bytes',
-                                'Cache-Control': 'public, max-age=3600',
-                                'Access-Control-Allow-Origin': '*',
-                            },
-                        });
+                        const errorText = await audioResponse.text();
+                        return NextResponse.json(
+                            { error: `Failed to fetch audio: ${audioResponse.status}` },
+                            { status: audioResponse.status }
+                        );
                     }
                     
-                    return NextResponse.json(
-                        { error: 'No audio available for this conversation' },
-                        { status: 404 }
-                    );
+                    const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
+                    const audioBuffer = await audioResponse.arrayBuffer();
+                    
+                    if (audioBuffer.byteLength === 0) {
+                        return NextResponse.json(
+                            { error: 'Empty audio response' },
+                            { status: 500 }
+                        );
+                    }
+                    
+                    return new NextResponse(audioBuffer, {
+                        headers: {
+                            'Content-Type': contentType,
+                            'Content-Length': audioBuffer.byteLength.toString(),
+                            'Cache-Control': 'public, max-age=3600',
+                        },
+                    });
                 } catch (error) {
                     console.error('Audio fetch error:', error);
-                    const errorMsg = error instanceof Error ? error.message : 'Failed to fetch audio';
-                    
-                    // Check for specific error types
-                    if (errorMsg.includes('404')) {
-                        return NextResponse.json(
-                            { error: 'Audio recording not available for this conversation' },
-                            { status: 404 }
-                        );
-                    }
-                    if (errorMsg.includes('401') || errorMsg.includes('403')) {
-                        return NextResponse.json(
-                            { error: 'Invalid or expired API key' },
-                            { status: 401 }
-                        );
-                    }
-                    
                     return NextResponse.json(
-                        { error: errorMsg },
+                        { error: error instanceof Error ? error.message : 'Failed to fetch audio' },
                         { status: 500 }
                     );
                 }

@@ -679,124 +679,62 @@ export default function ConversationsPage() {
 
     const loadElAudio = async (useAlternative = false) => {
         if (!selectedElConversation) return;
-        if (!elApiKey && !picaSecretKey) {
-            toast.error('ElevenLabs API key or Pica credentials required for audio playback');
+        if (!elApiKey) {
+            toast.error('ElevenLabs API key required for audio playback');
             setIsConfigOpen(true);
             return;
         }
         
-        // Log conversation audio status
-        console.log('[Audio] Conversation audio status:', {
-            conversation_id: selectedElConversation.conversation_id,
-            has_audio: selectedElConversation.has_audio,
-            has_user_audio: selectedElConversation.has_user_audio,
-            has_response_audio: selectedElConversation.has_response_audio,
-            status: selectedElConversation.status,
-        });
-        
         setLoadingAudio(true);
-        cleanupAudioUrl(); // Revoke previous blob URL
-        setElAudioUrl(undefined); // Clear previous URL
+        cleanupAudioUrl();
+        setElAudioUrl(undefined);
         
         const conversationId = selectedElConversation.conversation_id;
         
-        // Build headers with all credentials
-        const headers: Record<string, string> = {};
-        if (picaSecretKey) headers['x-pica-secret'] = picaSecretKey;
-        if (elConnectionKey) headers['x-pica-connection-key'] = elConnectionKey;
-        if (elApiKey) headers['x-elevenlabs-api-key'] = elApiKey;
-        
-        // Check if conversation already has a direct recording URL
-        const directUrl = selectedElConversation.recording_url || 
-                          selectedElConversation.audio_url || 
-                          selectedElConversation.metadata?.recording_url;
-        
-        if (directUrl) {
-            console.log('[Audio] Using direct recording URL from conversation:', directUrl);
-            try {
-                const response = await fetch(directUrl);
-                if (response.ok) {
-                    const audioData = await response.arrayBuffer();
-                    if (audioData.byteLength > 0) {
-                        const contentType = response.headers.get('content-type') || 'audio/mpeg';
-                        const blob = new Blob([audioData], { type: contentType });
-                        const blobUrl = URL.createObjectURL(blob);
-                        setElAudioUrl(blobUrl);
-                        setAudioFetchMethod('blob');
-                        toast.success('Audio loaded successfully');
-                        setLoadingAudio(false);
-                        return;
-                    }
-                }
-            } catch (e) {
-                console.log('[Audio] Direct URL failed, trying API:', e);
-            }
-        }
-        
-        // Debug what's happening with the audio endpoint
-        try {
-            const debugResponse = await fetch(
-                `/api/elevenlabs?action=debug-audio&id=${conversationId}`,
-                { headers }
-            );
-            const debugData = await debugResponse.json();
-            console.log('[Audio Debug]', debugData);
-            
-            // If debug shows a direct audio URL, try using it
-            if (debugData.directApiBody?.audio_url) {
-                console.log('[Audio] Found audio_url in debug response:', debugData.directApiBody.audio_url);
-            }
-            if (debugData.picaApiBody?.audio_url) {
-                console.log('[Audio] Found audio_url in Pica response:', debugData.picaApiBody.audio_url);
-            }
-        } catch (e) {
-            console.error('[Audio Debug Error]', e);
-        }
+        // Debug logging
+        console.log('[Audio Load] Starting audio load:', {
+            conversationId,
+            selectedAgentId,
+            hasApiKey: !!elApiKey,
+            apiKeyLength: elApiKey?.length,
+        });
         
         try {
-            // Fetch audio with all credentials in headers
-            const response = await fetch(
-                `/api/elevenlabs?action=audio&id=${conversationId}&t=${Date.now()}`,
-                { headers }
-            );
+            const url = `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`;
+            console.log('[Audio Load] Fetching from:', url);
             
-            console.log('[Audio Response]', {
+            const response = await fetch(url);
+            
+            console.log('[Audio Load] Response:', {
                 status: response.status,
                 contentType: response.headers.get('content-type'),
-                contentLength: response.headers.get('content-length'),
             });
             
-            // Check if response is JSON (error) or audio
             const contentType = response.headers.get('content-type') || '';
             
             if (!response.ok || contentType.includes('application/json')) {
-                // It's an error response
                 let errorMsg = 'Audio not available';
                 try {
                     const errorData = await response.json();
-                    console.log('[Audio Error Response]', errorData);
+                    console.log('[Audio Load] Error response:', errorData);
                     errorMsg = errorData.error || errorMsg;
                 } catch {
-                    // Ignore JSON parse error
+                    // Ignore parse error
                 }
                 throw new Error(errorMsg);
             }
             
-            // It's audio data - create blob URL with proper MIME type
             const audioData = await response.arrayBuffer();
+            console.log('[Audio Load] Got audio data:', audioData.byteLength, 'bytes');
             
             if (audioData.byteLength === 0) {
                 throw new Error('Audio file is empty');
             }
             
-            // Use the content-type from response, fallback to audio/mpeg
             let mimeType = contentType || 'audio/mpeg';
-            // Ensure valid audio MIME type
             if (!mimeType.startsWith('audio/')) {
                 mimeType = 'audio/mpeg';
             }
-            
-            console.log(`Audio loaded: ${audioData.byteLength} bytes, type: ${mimeType}`);
             
             const blob = new Blob([audioData], { type: mimeType });
             const blobUrl = URL.createObjectURL(blob);
@@ -807,8 +745,6 @@ export default function ConversationsPage() {
             console.error('Audio load error:', error);
             const errorMsg = error instanceof Error ? error.message : 'Failed to load audio';
             toast.error(errorMsg);
-            
-            // Show a message but don't set URL since audio isn't available
             setElAudioUrl(undefined);
         } finally {
             setLoadingAudio(false);
