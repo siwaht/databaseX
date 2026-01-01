@@ -690,10 +690,18 @@ export default function ConversationsPage() {
         
         const conversationId = selectedElConversation.conversation_id;
         
+        // Build headers with all credentials
+        const headers: Record<string, string> = {
+            'x-pica-secret': picaSecretKey,
+            'x-pica-connection-key': elConnectionKey,
+            'x-elevenlabs-api-key': elApiKey,
+        };
+        
         // First, let's debug what's happening with the audio endpoint
         try {
             const debugResponse = await fetch(
-                `/api/elevenlabs?action=debug-audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}`
+                `/api/elevenlabs?action=debug-audio&id=${conversationId}`,
+                { headers }
             );
             const debugData = await debugResponse.json();
             console.log('[Audio Debug]', debugData);
@@ -702,9 +710,10 @@ export default function ConversationsPage() {
         }
         
         try {
-            // Always use blob method for reliability - fetch the audio first, then create object URL
+            // Fetch audio with all credentials in headers
             const response = await fetch(
-                `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`
+                `/api/elevenlabs?action=audio&id=${conversationId}&t=${Date.now()}`,
+                { headers }
             );
             
             console.log('[Audio Response]', {

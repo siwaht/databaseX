@@ -116,6 +116,39 @@ async function fetchElevenLabsDirect<T>(
     return resp.json();
 }
 
+// Pica Passthrough API call for binary data (like audio)
+async function fetchElevenLabsPicaBinary(
+    endpoint: string,
+    actionId: string,
+    config: PicaElevenLabsConfig
+): Promise<{ data: ArrayBuffer; contentType: string } | null> {
+    const url = new URL(`${PICA_BASE_URL}${endpoint}`);
+
+    const resp = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+            'x-pica-secret': config.secretKey,
+            'x-pica-connection-key': config.connectionKey,
+            'x-pica-action-id': actionId,
+        },
+    });
+
+    if (!resp.ok) {
+        const errorText = await resp.text();
+        throw new Error(`Pica API error: ${resp.status} - ${errorText}`);
+    }
+
+    const contentType = resp.headers.get('content-type') || '';
+    
+    // If JSON, return null (caller should handle JSON response separately)
+    if (contentType.includes('application/json')) {
+        return null;
+    }
+    
+    const data = await resp.arrayBuffer();
+    return { data, contentType };
+}
+
 // Pica Passthrough API call
 async function fetchElevenLabsPica<T>(
     endpoint: string,
@@ -249,13 +282,34 @@ export async function getElevenLabsConversationAudio(
     // Try Pica passthrough
     if (config.secretKey && config.connectionKey) {
         console.log('[Pica] Fetching audio via passthrough');
+        
+        // First try to get binary audio directly
+        try {
+            const binaryResult = await fetchElevenLabsPicaBinary(
+                `/v1/convai/conversations/${conversationId}/audio`,
+                ELEVENLABS_ACTION_IDS.GET_CONVERSATION_AUDIO,
+                config
+            );
+            
+            if (binaryResult && binaryResult.data.byteLength > 0) {
+                console.log('[Pica] Got binary audio:', binaryResult.data.byteLength, 'bytes');
+                return {
+                    audio_data: binaryResult.data,
+                    content_type: binaryResult.contentType || 'audio/mpeg',
+                };
+            }
+        } catch (error) {
+            console.log('[Pica] Binary fetch failed, trying JSON:', error);
+        }
+        
+        // Fallback to JSON response (might contain audio_url)
         try {
             const result = await fetchElevenLabsPica<{ audio_url?: string }>(
                 `/v1/convai/conversations/${conversationId}/audio`,
                 ELEVENLABS_ACTION_IDS.GET_CONVERSATION_AUDIO,
                 config
             );
-            console.log('[Pica] Audio response:', JSON.stringify(result));
+            console.log('[Pica] Audio JSON response:', JSON.stringify(result));
             return result;
         } catch (error) {
             console.error('[Pica] Audio fetch error:', error);

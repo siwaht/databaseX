@@ -13,10 +13,12 @@ function getConfig(request: Request): PicaElevenLabsConfig {
     
     // For audio requests, also check query param since browser audio player can't send headers
     const apiKeyFromQuery = url.searchParams.get('apiKey');
+    const secretKeyFromQuery = url.searchParams.get('secretKey');
+    const connectionKeyFromQuery = url.searchParams.get('connectionKey');
     
     return {
-        secretKey: request.headers.get('x-pica-secret') || process.env.PICA_SECRET_KEY || '',
-        connectionKey: request.headers.get('x-pica-connection-key') || process.env.PICA_ELEVENLABS_CONNECTION_KEY || '',
+        secretKey: secretKeyFromQuery || request.headers.get('x-pica-secret') || process.env.PICA_SECRET_KEY || '',
+        connectionKey: connectionKeyFromQuery || request.headers.get('x-pica-connection-key') || process.env.PICA_ELEVENLABS_CONNECTION_KEY || '',
         elevenLabsApiKey: apiKeyFromQuery || request.headers.get('x-elevenlabs-api-key') || process.env.ELEVENLABS_API_KEY || '',
     };
 }
