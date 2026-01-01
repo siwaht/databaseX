@@ -110,6 +110,7 @@ export default function BookingsPage() {
     // Availability State
     const [availability, setAvailability] = useState<{ [day: string]: { start: string; end: string } | null }>({});
     const [is24x7, setIs24x7] = useState(false);
+    const [allowOpenEvents, setAllowOpenEvents] = useState(false);
     const [editingDay, setEditingDay] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,6 +186,9 @@ export default function BookingsPage() {
                     }
                     if (settings.is24x7 !== undefined) {
                         setIs24x7(settings.is24x7);
+                    }
+                    if (settings.allowOpenEvents !== undefined) {
+                        setAllowOpenEvents(settings.allowOpenEvents);
                     }
                 }
                 if (leadsRes.ok) {
@@ -475,6 +479,29 @@ export default function BookingsPage() {
         }
     };
 
+    const handleOpenEventsToggle = async (enabled: boolean) => {
+        setAllowOpenEvents(enabled);
+        try {
+            const settingsRes = await fetch('/api/bookings/settings');
+            const currentSettings = settingsRes.ok ? await settingsRes.json() : {};
+
+            const res = await fetch('/api/bookings/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...currentSettings,
+                    allowOpenEvents: enabled,
+                }),
+            });
+
+            if (!res.ok) throw new Error("Failed to save");
+            toast.success(enabled ? "Open events enabled - any event type allowed" : "Open events disabled - only predefined event types allowed");
+        } catch (error) {
+            setAllowOpenEvents(!enabled); // Revert on error
+            toast.error("Failed to update event type mode");
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -739,6 +766,32 @@ export default function BookingsPage() {
                 </TabsContent>
 
                 <TabsContent value="events" className="space-y-4">
+                    {/* Open Events Toggle Card */}
+                    <Card className={allowOpenEvents ? "border-blue-500/30 bg-gradient-to-br from-blue-500/5 to-transparent" : ""}>
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-base">Open Events</CardTitle>
+                                    <CardDescription>
+                                        Allow any event type name via MCP (no predefined types required)
+                                    </CardDescription>
+                                </div>
+                                <Switch 
+                                    checked={allowOpenEvents} 
+                                    onCheckedChange={handleOpenEventsToggle}
+                                />
+                            </div>
+                        </CardHeader>
+                        {allowOpenEvents && (
+                            <CardContent className="pt-0">
+                                <p className="text-sm text-blue-600">
+                                    AI agents can create bookings with any event type name. A default 30-minute duration will be used.
+                                </p>
+                            </CardContent>
+                        )}
+                    </Card>
+
+                    {/* Event Types Grid */}
                     <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {events.map((event) => (
                             <Card key={event.id} className="group relative overflow-hidden transition-all hover:shadow-md">

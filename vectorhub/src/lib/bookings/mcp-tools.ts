@@ -139,7 +139,10 @@ export const bookingMcpTools = [
         2. Call booking_find FIRST to check if guest already has a booking - use booking_update instead if updating.
         
         Use this when someone wants to book a NEW meeting at a particular time slot.
-        Requires: eventTypeId, startTime, guestName, guestEmail.
+        Requires: startTime, guestName, guestEmail, and EITHER eventTypeId OR eventTypeName.
+        
+        If "Open Events" is enabled in settings, you can use eventTypeName with any custom name.
+        Otherwise, you must use eventTypeId from event_types_list.
         
         startTime MUST be a valid ISO 8601 datetime string (e.g., "2025-01-06T15:00:00").
         - For "3pm" use "15:00:00" (24-hour format)
@@ -148,7 +151,9 @@ export const bookingMcpTools = [
         inputSchema: {
             type: "object",
             properties: {
-                eventTypeId: { type: "string", description: "The event type ID (get from event_types_list)" },
+                eventTypeId: { type: "string", description: "The event type ID (get from event_types_list). Required unless Open Events is enabled." },
+                eventTypeName: { type: "string", description: "Custom event type name (only works if Open Events is enabled in settings)" },
+                duration: { type: "number", description: "Duration in minutes (default: 30, only used with eventTypeName)" },
                 startTime: { type: "string", description: "Start time in ISO format, e.g., '2025-01-06T15:00:00' for 3pm (REQUIRED)" },
                 endTime: { type: "string", description: "End time in ISO format (optional, auto-calculated from event duration)" },
                 guestName: { type: "string", description: "Guest's full name" },
@@ -163,7 +168,7 @@ export const bookingMcpTools = [
                     additionalProperties: true
                 },
             },
-            required: ["eventTypeId", "startTime", "guestName", "guestEmail"],
+            required: ["startTime", "guestName", "guestEmail"],
         },
     },
     {
@@ -192,11 +197,15 @@ export const bookingMcpTools = [
         
         IMPORTANT: Call get_current_datetime FIRST to get correct dates.
         
+        Provide EITHER eventTypeId OR eventTypeName (if Open Events is enabled).
+        
         startTime format: ISO 8601 (e.g., "2025-01-06T15:00:00" for 3pm)`,
         inputSchema: {
             type: "object",
             properties: {
-                eventTypeId: { type: "string", description: "The event type ID" },
+                eventTypeId: { type: "string", description: "The event type ID (required unless Open Events is enabled)" },
+                eventTypeName: { type: "string", description: "Custom event type name (only works if Open Events is enabled)" },
+                duration: { type: "number", description: "Duration in minutes (default: 30, only used with eventTypeName)" },
                 startTime: { type: "string", description: "Start time in ISO format, e.g., '2025-01-06T15:00:00'" },
                 guestName: { type: "string", description: "Guest's full name" },
                 guestEmail: { type: "string", description: "Guest's email address" },
@@ -205,7 +214,7 @@ export const bookingMcpTools = [
                 notes: { type: "string", description: "Notes about the booking" },
                 agenda: { type: "string", description: "Meeting agenda" },
             },
-            required: ["eventTypeId", "startTime", "guestName", "guestEmail"],
+            required: ["startTime", "guestName", "guestEmail"],
         },
     },
     {
@@ -657,30 +666,67 @@ export async function handleBookingToolCall(
             }
 
             case "booking_create": {
+                const settings = await getBookingSettings();
                 const eventTypes = await listEventTypes();
-                const eventType = eventTypes.find((e) => e.id === args.eventTypeId);
+                
+                let eventTypeId: string;
+                let eventTypeName: string;
+                let eventDuration: number;
 
-                if (!eventType) {
-                    // List available event types for helpful error message
+                // Check if using eventTypeId or eventTypeName (open events)
+                if (args.eventTypeId) {
+                    const eventType = eventTypes.find((e) => e.id === args.eventTypeId);
+
+                    if (!eventType) {
+                        // Check if open events is enabled
+                        if (settings.allowOpenEvents && args.eventTypeName) {
+                            // Allow custom event type name
+                            eventTypeId = "open-event";
+                            eventTypeName = args.eventTypeName as string;
+                            eventDuration = (args.duration as number) || 30;
+                        } else {
+                            // List available event types for helpful error message
+                            const activeEventTypes = eventTypes.filter(e => e.isActive);
+                            const availableTypes = activeEventTypes.map(e => `- ${e.name} (ID: ${e.id})`).join('\n');
+                            return { 
+                                success: false, 
+                                error: `Event type not found: ${args.eventTypeId}. Available event types:\n${availableTypes || 'No event types configured. Please create one first.'}` 
+                            };
+                        }
+                    } else {
+                        // Check if event type is active
+                        if (!eventType.isActive) {
+                            return { 
+                                success: false, 
+                                error: `Event type "${eventType.name}" is not active. Please choose an active event type.` 
+                            };
+                        }
+                        eventTypeId = eventType.id;
+                        eventTypeName = eventType.name;
+                        eventDuration = eventType.duration;
+                    }
+                } else if (args.eventTypeName && settings.allowOpenEvents) {
+                    // Open events mode - use custom event type name
+                    eventTypeId = "open-event";
+                    eventTypeName = args.eventTypeName as string;
+                    eventDuration = (args.duration as number) || 30;
+                } else if (args.eventTypeName && !settings.allowOpenEvents) {
+                    return { 
+                        success: false, 
+                        error: `Open Events is not enabled. Please use eventTypeId from event_types_list, or enable "Open Events" in settings to use custom event type names.` 
+                    };
+                } else {
+                    // No event type specified
                     const activeEventTypes = eventTypes.filter(e => e.isActive);
                     const availableTypes = activeEventTypes.map(e => `- ${e.name} (ID: ${e.id})`).join('\n');
                     return { 
                         success: false, 
-                        error: `Event type not found: ${args.eventTypeId}. Available event types:\n${availableTypes || 'No event types configured. Please create one first.'}` 
-                    };
-                }
-
-                // Check if event type is active
-                if (!eventType.isActive) {
-                    return { 
-                        success: false, 
-                        error: `Event type "${eventType.name}" is not active. Please choose an active event type.` 
+                        error: `Event type is required. Provide eventTypeId from event_types_list${settings.allowOpenEvents ? ', or use eventTypeName for custom events' : ''}.\n\nAvailable event types:\n${availableTypes || 'No event types configured.'}` 
                     };
                 }
 
                 // Validate booking time against working hours (skip if 24/7 mode is enabled)
                 const startTime = new Date(args.startTime as string);
-                const settings = await getBookingSettings();
                 
                 // Skip working hours validation if 24/7 mode is enabled
                 if (!settings.is24x7) {
@@ -711,7 +757,7 @@ export async function handleBookingToolCall(
 
                     // Calculate end time to check if booking fits within working hours
                     const endTimeDate = new Date(startTime);
-                    endTimeDate.setMinutes(endTimeDate.getMinutes() + eventType.duration);
+                    endTimeDate.setMinutes(endTimeDate.getMinutes() + eventDuration);
                     const endTimeMinutes = endTimeDate.getHours() * 60 + endTimeDate.getMinutes();
 
                     if (bookingTimeMinutes < workStartMinutes || endTimeMinutes > workEndMinutes) {
@@ -726,7 +772,7 @@ export async function handleBookingToolCall(
                 let endTime = args.endTime as string;
                 if (!endTime && args.startTime) {
                     const start = new Date(args.startTime as string);
-                    start.setMinutes(start.getMinutes() + eventType.duration);
+                    start.setMinutes(start.getMinutes() + eventDuration);
                     endTime = start.toISOString();
                 }
 
@@ -748,8 +794,8 @@ export async function handleBookingToolCall(
 
                 const newBooking: Booking = {
                     id: crypto.randomUUID(),
-                    eventTypeId: args.eventTypeId as string,
-                    eventTypeName: eventType.name,
+                    eventTypeId: eventTypeId,
+                    eventTypeName: eventTypeName,
                     startTime: args.startTime as string,
                     endTime: endTime,
                     guestName: args.guestName as string,
@@ -819,30 +865,61 @@ export async function handleBookingToolCall(
                          b.status !== "cancelled"
                 );
                 
+                const settings = await getBookingSettings();
                 const eventTypes = await listEventTypes();
-                const eventType = eventTypes.find((e) => e.id === args.eventTypeId);
                 
-                if (!eventType) {
-                    // List available event types for helpful error message
+                let eventTypeId: string;
+                let eventTypeName: string;
+                let eventDuration: number;
+
+                // Check if using eventTypeId or eventTypeName (open events)
+                if (args.eventTypeId) {
+                    const eventType = eventTypes.find((e) => e.id === args.eventTypeId);
+                    
+                    if (!eventType) {
+                        if (settings.allowOpenEvents && args.eventTypeName) {
+                            eventTypeId = "open-event";
+                            eventTypeName = args.eventTypeName as string;
+                            eventDuration = (args.duration as number) || 30;
+                        } else {
+                            const activeEventTypes = eventTypes.filter(e => e.isActive);
+                            const availableTypes = activeEventTypes.map(e => `- ${e.name} (ID: ${e.id})`).join('\n');
+                            return { 
+                                success: false, 
+                                error: `Event type not found: ${args.eventTypeId}. Available event types:\n${availableTypes || 'No event types configured.'}` 
+                            };
+                        }
+                    } else {
+                        if (!eventType.isActive) {
+                            return { 
+                                success: false, 
+                                error: `Event type "${eventType.name}" is not active. Please choose an active event type.` 
+                            };
+                        }
+                        eventTypeId = eventType.id;
+                        eventTypeName = eventType.name;
+                        eventDuration = eventType.duration;
+                    }
+                } else if (args.eventTypeName && settings.allowOpenEvents) {
+                    eventTypeId = "open-event";
+                    eventTypeName = args.eventTypeName as string;
+                    eventDuration = (args.duration as number) || 30;
+                } else if (args.eventTypeName && !settings.allowOpenEvents) {
+                    return { 
+                        success: false, 
+                        error: `Open Events is not enabled. Please use eventTypeId, or enable "Open Events" in settings.` 
+                    };
+                } else {
                     const activeEventTypes = eventTypes.filter(e => e.isActive);
                     const availableTypes = activeEventTypes.map(e => `- ${e.name} (ID: ${e.id})`).join('\n');
                     return { 
                         success: false, 
-                        error: `Event type not found: ${args.eventTypeId}. Available event types:\n${availableTypes || 'No event types configured. Please create one first.'}` 
-                    };
-                }
-
-                // Check if event type is active
-                if (!eventType.isActive) {
-                    return { 
-                        success: false, 
-                        error: `Event type "${eventType.name}" is not active. Please choose an active event type.` 
+                        error: `Event type is required. Provide eventTypeId${settings.allowOpenEvents ? ' or eventTypeName' : ''}.\n\nAvailable:\n${availableTypes || 'None'}` 
                     };
                 }
 
                 // Validate booking time against working hours (skip if 24/7 mode is enabled)
                 const startTime = new Date(args.startTime as string);
-                const settings = await getBookingSettings();
                 
                 // Skip working hours validation if 24/7 mode is enabled
                 if (!settings.is24x7) {
@@ -873,7 +950,7 @@ export async function handleBookingToolCall(
 
                     // Calculate end time to check if booking fits within working hours
                     const endTimeDate = new Date(startTime);
-                    endTimeDate.setMinutes(endTimeDate.getMinutes() + eventType.duration);
+                    endTimeDate.setMinutes(endTimeDate.getMinutes() + eventDuration);
                     const endTimeMinutes = endTimeDate.getHours() * 60 + endTimeDate.getMinutes();
 
                     if (bookingTimeMinutes < workStartMinutes || endTimeMinutes > workEndMinutes) {
@@ -888,7 +965,7 @@ export async function handleBookingToolCall(
                 let endTime = args.endTime as string;
                 if (!endTime && args.startTime) {
                     const start = new Date(args.startTime as string);
-                    start.setMinutes(start.getMinutes() + eventType.duration);
+                    start.setMinutes(start.getMinutes() + eventDuration);
                     endTime = start.toISOString();
                 }
                 
@@ -897,8 +974,8 @@ export async function handleBookingToolCall(
                     const updates: Partial<Booking> = {
                         startTime: args.startTime as string,
                         endTime: endTime,
-                        eventTypeId: args.eventTypeId as string,
-                        eventTypeName: eventType.name,
+                        eventTypeId: eventTypeId,
+                        eventTypeName: eventTypeName,
                     };
                     
                     if (args.guestName) updates.guestName = args.guestName as string;
@@ -926,8 +1003,8 @@ export async function handleBookingToolCall(
                     
                     const newBooking: Booking = {
                         id: crypto.randomUUID(),
-                        eventTypeId: args.eventTypeId as string,
-                        eventTypeName: eventType.name,
+                        eventTypeId: eventTypeId,
+                        eventTypeName: eventTypeName,
                         startTime: args.startTime as string,
                         endTime: endTime,
                         guestName: args.guestName as string,

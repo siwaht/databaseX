@@ -95,6 +95,7 @@ export interface BookingSettings {
         [day: string]: { start: string; end: string } | null
     };
     is24x7?: boolean; // If true, bookings are available 24/7 (ignores availability)
+    allowOpenEvents?: boolean; // If true, allows any event type name (doesn't require predefined event types)
     brandColor: string;
     leadCustomFields?: CustomField[]; // Custom fields for all leads
 }
