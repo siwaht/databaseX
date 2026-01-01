@@ -8,16 +8,16 @@ import {
 } from "@/lib/elevenlabs/pica-client";
 
 function getConfig(request: Request): PicaElevenLabsConfig {
-    // For audio requests, we need to use env vars since audio player can't send headers
-    const isAudioRequest = new URL(request.url).searchParams.get('action') === 'audio';
+    const url = new URL(request.url);
+    const action = url.searchParams.get('action');
+    
+    // For audio requests, also check query param since browser audio player can't send headers
+    const apiKeyFromQuery = url.searchParams.get('apiKey');
     
     return {
         secretKey: request.headers.get('x-pica-secret') || process.env.PICA_SECRET_KEY || '',
         connectionKey: request.headers.get('x-pica-connection-key') || process.env.PICA_ELEVENLABS_CONNECTION_KEY || '',
-        // For audio, prioritize env var since browser audio player can't send headers
-        elevenLabsApiKey: isAudioRequest 
-            ? (process.env.ELEVENLABS_API_KEY || request.headers.get('x-elevenlabs-api-key') || '')
-            : (request.headers.get('x-elevenlabs-api-key') || process.env.ELEVENLABS_API_KEY || ''),
+        elevenLabsApiKey: apiKeyFromQuery || request.headers.get('x-elevenlabs-api-key') || process.env.ELEVENLABS_API_KEY || '',
     };
 }
 

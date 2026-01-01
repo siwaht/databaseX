@@ -513,21 +513,23 @@ export default function ConversationsPage() {
 
     const loadElAudio = async () => {
         if (!selectedElConversation) return;
+        if (!elApiKey) {
+            toast.error('ElevenLabs API key required for audio playback');
+            setIsConfigOpen(true);
+            return;
+        }
         setLoadingAudio(true);
         try {
             // Check if audio is available
-            const checkRes = await fetch(`/api/elevenlabs?action=audio-url&id=${selectedElConversation.conversation_id}`, {
-                headers: {
-                    'x-elevenlabs-api-key': elApiKey,
-                },
-            });
+            const checkRes = await fetch(`/api/elevenlabs?action=audio-url&id=${selectedElConversation.conversation_id}&apiKey=${encodeURIComponent(elApiKey)}`);
             const checkData = await checkRes.json();
             
             if (checkData.has_audio && checkData.audio_url) {
-                setElAudioUrl(checkData.audio_url);
+                // Add API key to the audio URL for playback
+                setElAudioUrl(`${checkData.audio_url}&apiKey=${encodeURIComponent(elApiKey)}`);
                 toast.success('Audio loaded');
             } else {
-                toast.error('Audio not available for this conversation');
+                toast.error(checkData.error || 'Audio not available for this conversation');
             }
         } catch {
             toast.error('Failed to load audio');
