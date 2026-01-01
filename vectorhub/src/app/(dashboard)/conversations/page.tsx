@@ -25,7 +25,6 @@ import {
     TrendingUp,
     TrendingDown,
     Activity,
-    PhoneCall,
     Timer,
     LayoutDashboard,
 } from "lucide-react";
@@ -62,12 +61,10 @@ function AudioPlayer({
     audioUrl, 
     title,
     onRetry,
-    conversationId,
 }: { 
     audioUrl: string; 
     title?: string;
     onRetry?: () => void;
-    conversationId?: string;
 }) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -77,7 +74,7 @@ function AudioPlayer({
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [retryCount, setRetryCount] = useState(0);
-    const maxRetries = 3;
+    const maxRetries = 2;
 
     const handleRetry = () => {
         if (retryCount < maxRetries) {
@@ -348,7 +345,6 @@ function ConversationDetailDialog({
                             audioUrl={audioUrl} 
                             title="Call Recording" 
                             onRetry={onRetryAudio}
-                            conversationId={conversation.conversation_id}
                         />
                     ) : onLoadAudio ? (
                         <Card className="p-4">
@@ -668,43 +664,49 @@ export default function ConversationsPage() {
             return;
         }
         setLoadingAudio(true);
+        setElAudioUrl(undefined); // Clear previous URL
         
         const conversationId = selectedElConversation.conversation_id;
         
         try {
-            if (useAlternative || audioFetchMethod === 'blob') {
-                // Alternative method: Fetch as blob and create object URL
-                setAudioFetchMethod('blob');
-                toast.info('Trying alternative audio fetch method...');
-                
-                const response = await fetch(
-                    `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}`
-                );
-                
-                if (!response.ok) {
-                    throw new Error(`Audio fetch failed: ${response.status}`);
+            // Always use blob method for reliability - fetch the audio first, then create object URL
+            const response = await fetch(
+                `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`
+            );
+            
+            // Check if response is JSON (error) or audio
+            const contentType = response.headers.get('content-type') || '';
+            
+            if (!response.ok || contentType.includes('application/json')) {
+                // It's an error response
+                let errorMsg = 'Audio not available';
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch {
+                    // Ignore JSON parse error
                 }
-                
-                const blob = await response.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                setElAudioUrl(blobUrl);
-                toast.success('Audio loaded via blob');
-            } else {
-                // Primary method: Direct URL (browser handles streaming)
-                setAudioFetchMethod('proxy');
-                const audioUrl = `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`;
-                setElAudioUrl(audioUrl);
-                toast.success('Audio player loaded');
+                throw new Error(errorMsg);
             }
+            
+            // It's audio data - create blob URL
+            const blob = await response.blob();
+            
+            if (blob.size === 0) {
+                throw new Error('Audio file is empty');
+            }
+            
+            const blobUrl = URL.createObjectURL(blob);
+            setElAudioUrl(blobUrl);
+            setAudioFetchMethod('blob');
+            toast.success('Audio loaded successfully');
         } catch (error) {
             console.error('Audio load error:', error);
-            if (!useAlternative && audioFetchMethod === 'proxy') {
-                // Try alternative method
-                toast.info('Primary method failed, trying alternative...');
-                loadElAudio(true);
-            } else {
-                toast.error('Failed to load audio. The recording may not be available.');
-            }
+            const errorMsg = error instanceof Error ? error.message : 'Failed to load audio';
+            toast.error(errorMsg);
+            
+            // Show a message but don't set URL since audio isn't available
+            setElAudioUrl(undefined);
         } finally {
             setLoadingAudio(false);
         }
