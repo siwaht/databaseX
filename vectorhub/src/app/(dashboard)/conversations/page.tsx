@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     MessageSquare,
     Phone,
@@ -16,7 +16,13 @@ import {
     ThumbsUp,
     ThumbsDown,
     Play,
+    Pause,
     Mic,
+    Volume2,
+    Download,
+    History,
+    BarChart3,
+    X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Dialog,
     DialogContent,
@@ -40,8 +47,218 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { TwilioConversation, TwilioMessage, TwilioTranscription } from "@/lib/twilio/pica-client";
 import { ElevenLabsConversation, ElevenLabsConversationDetail } from "@/lib/elevenlabs/pica-client";
+
+// Audio Player Component
+function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) {
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [volume, setVolume] = useState(1);
+
+    const togglePlay = () => {
+        if (audioRef.current) {
+            if (isPlaying) {
+                audioRef.current.pause();
+            } else {
+                audioRef.current.play();
+            }
+            setIsPlaying(!isPlaying);
+        }
+    };
+
+    const handleTimeUpdate = () => {
+        if (audioRef.current) {
+            setCurrentTime(audioRef.current.currentTime);
+        }
+    };
+
+    const handleLoadedMetadata = () => {
+        if (audioRef.current) {
+            setDuration(audioRef.current.duration);
+        }
+    };
+
+    const handleSeek = (value: number[]) => {
+        if (audioRef.current) {
+            audioRef.current.currentTime = value[0];
+            setCurrentTime(value[0]);
+        }
+    };
+
+    const handleVolumeChange = (value: number[]) => {
+        if (audioRef.current) {
+            audioRef.current.volume = value[0];
+            setVolume(value[0]);
+        }
+    };
+
+    const formatTime = (time: number) => {
+        const mins = Math.floor(time / 60);
+        const secs = Math.floor(time % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    return (
+        <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+            <audio
+                ref={audioRef}
+                src={audioUrl}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={() => setIsPlaying(false)}
+            />
+            {title && <p className="text-sm font-medium">{title}</p>}
+            <div className="flex items-center gap-3">
+                <Button size="icon" variant="outline" onClick={togglePlay}>
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                </Button>
+                <div className="flex-1 space-y-1">
+                    <Slider
+                        value={[currentTime]}
+                        max={duration || 100}
+                        step={0.1}
+                        onValueChange={handleSeek}
+                        className="cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{formatTime(currentTime)}</span>
+                        <span>{formatTime(duration)}</span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 w-24">
+                    <Volume2 className="h-4 w-4 text-muted-foreground" />
+                    <Slider
+                        value={[volume]}
+                        max={1}
+                        step={0.1}
+                        onValueChange={handleVolumeChange}
+                        className="cursor-pointer"
+                    />
+                </div>
+                <Button size="icon" variant="ghost" asChild>
+                    <a href={audioUrl} download>
+                        <Download className="h-4 w-4" />
+                    </a>
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+// Conversation Detail Dialog
+function ConversationDetailDialog({
+    conversation,
+    onClose,
+    onFeedback,
+    audioUrl,
+}: {
+    conversation: ElevenLabsConversationDetail | null;
+    onClose: () => void;
+    onFeedback: (id: string, feedback: 'like' | 'dislike') => void;
+    audioUrl?: string;
+}) {
+    if (!conversation) return null;
+
+    const formatDuration = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    return (
+        <Dialog open={!!conversation} onOpenChange={() => onClose()}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+                <DialogHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <DialogTitle>Conversation Details</DialogTitle>
+                            <DialogDescription>
+                                Duration: {formatDuration(conversation.metadata.call_duration_secs)} • 
+                                Status: {conversation.status} •
+                                {new Date(conversation.metadata.start_time_unix_secs * 1000).toLocaleString()}
+                            </DialogDescription>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => onFeedback(conversation.conversation_id, 'like')}>
+                                <ThumbsUp className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => onFeedback(conversation.conversation_id, 'dislike')}>
+                                <ThumbsDown className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-auto space-y-4">
+                    {/* Audio Player */}
+                    {audioUrl && (
+                        <AudioPlayer audioUrl={audioUrl} title="Call Recording" />
+                    )}
+
+                    {/* Summary */}
+                    {conversation.analysis?.transcript_summary && (
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm flex items-center gap-2">
+                                    <BarChart3 className="h-4 w-4" />
+                                    Summary
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground">{conversation.analysis.transcript_summary}</p>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Call Outcome */}
+                    <div className="flex gap-2">
+                        <Badge variant={conversation.analysis?.call_successful === 'success' ? 'default' : 'destructive'}>
+                            Call: {conversation.analysis?.call_successful || 'unknown'}
+                        </Badge>
+                        {conversation.feedback && (
+                            <Badge variant="outline">
+                                Feedback: {conversation.feedback.score}
+                            </Badge>
+                        )}
+                    </div>
+
+                    {/* Transcript */}
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                                <FileText className="h-4 w-4" />
+                                Transcript ({conversation.transcript.length} messages)
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ScrollArea className="h-[300px] pr-4">
+                                <div className="space-y-3">
+                                    {conversation.transcript.map((item, i) => (
+                                        <div key={i} className={`flex gap-3 ${item.role === 'agent' ? 'flex-row-reverse' : ''}`}>
+                                            <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${item.role === 'agent' ? 'bg-primary/10' : 'bg-muted'}`}>
+                                                {item.role === 'agent' ? <Mic className="h-4 w-4 text-primary" /> : <User className="h-4 w-4" />}
+                                            </div>
+                                            <div className={`flex-1 ${item.role === 'agent' ? 'text-right' : ''}`}>
+                                                <div className={`inline-block p-3 rounded-lg max-w-[85%] ${item.role === 'agent' ? 'bg-primary/10' : 'bg-muted'}`}>
+                                                    <p className="text-sm">{item.message}</p>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mt-1">{formatDuration(item.time_in_call_secs)}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function ConversationsPage() {
     // Provider selection
@@ -50,10 +267,13 @@ export default function ConversationsPage() {
     // ElevenLabs state
     const [elConversations, setElConversations] = useState<ElevenLabsConversation[]>([]);
     const [selectedElConversation, setSelectedElConversation] = useState<ElevenLabsConversationDetail | null>(null);
+    const [elAudioUrl, setElAudioUrl] = useState<string | undefined>();
     const [elConnectionKey, setElConnectionKey] = useState('');
+    const [elFilter, setElFilter] = useState<'all' | 'success' | 'failure'>('all');
     
     // Twilio state
     const [twilioConversations, setTwilioConversations] = useState<TwilioConversation[]>([]);
+    const [selectedTwilioConv, setSelectedTwilioConv] = useState<TwilioConversation | null>(null);
     const [twilioMessages, setTwilioMessages] = useState<TwilioMessage[]>([]);
     const [twilioTranscriptions, setTwilioTranscriptions] = useState<TwilioTranscription[]>([]);
     const [twilioConnectionKey, setTwilioConnectionKey] = useState('');
@@ -163,7 +383,11 @@ export default function ConversationsPage() {
         }
         setLoading(true);
         try {
-            const res = await fetch('/api/elevenlabs?action=conversations', {
+            let url = '/api/elevenlabs?action=conversations&page_size=50';
+            if (elFilter !== 'all') {
+                url += `&call_successful=${elFilter}`;
+            }
+            const res = await fetch(url, {
                 headers: {
                     'x-pica-secret': picaSecretKey,
                     'x-pica-connection-key': elConnectionKey,
@@ -186,6 +410,7 @@ export default function ConversationsPage() {
     const fetchElConversationDetail = async (conversationId: string) => {
         setLoading(true);
         try {
+            // Fetch conversation details
             const res = await fetch(`/api/elevenlabs?action=conversation&id=${conversationId}`, {
                 headers: {
                     'x-pica-secret': picaSecretKey,
@@ -197,6 +422,22 @@ export default function ConversationsPage() {
                 toast.error(data.error);
             } else {
                 setSelectedElConversation(data);
+                
+                // Try to fetch audio
+                try {
+                    const audioRes = await fetch(`/api/elevenlabs?action=audio&id=${conversationId}`, {
+                        headers: {
+                            'x-pica-secret': picaSecretKey,
+                            'x-pica-connection-key': elConnectionKey,
+                        },
+                    });
+                    const audioData = await audioRes.json();
+                    if (audioData.audio_url) {
+                        setElAudioUrl(audioData.audio_url);
+                    }
+                } catch {
+                    // Audio may not be available
+                }
             }
         } catch (error) {
             toast.error('Failed to fetch conversation details');
@@ -258,15 +499,17 @@ export default function ConversationsPage() {
         }
     };
 
-    const fetchTwilioMessages = async () => {
-        if (!serviceSid || !channelSid) {
+    const fetchTwilioMessages = async (svcSid?: string, chSid?: string) => {
+        const svc = svcSid || serviceSid;
+        const ch = chSid || channelSid;
+        if (!svc || !ch) {
             toast.error('Please enter Service SID and Channel SID');
             return;
         }
         setLoading(true);
         try {
             const res = await fetch(
-                `/api/twilio?action=messages&serviceSid=${serviceSid}&channelSid=${channelSid}`,
+                `/api/twilio?action=messages&serviceSid=${svc}&channelSid=${ch}`,
                 {
                     headers: {
                         'x-pica-secret': picaSecretKey,
@@ -318,6 +561,13 @@ export default function ConversationsPage() {
         }
     };
 
+    const selectTwilioConversation = (conv: TwilioConversation) => {
+        setSelectedTwilioConv(conv);
+        setServiceSid(conv.chat_service_sid);
+        setChannelSid(conv.sid);
+        fetchTwilioMessages(conv.chat_service_sid, conv.sid);
+    };
+
     const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -332,7 +582,7 @@ export default function ConversationsPage() {
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Conversations</h1>
                     <p className="text-muted-foreground text-sm sm:text-base">
-                        Access voice and chat conversations via Pica Passthrough
+                        View call recordings, transcripts, summaries and message history
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -365,158 +615,110 @@ export default function ConversationsPage() {
 
             {/* ElevenLabs Content */}
             {provider === 'elevenlabs' && (
+                <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                            <Select value={elFilter} onValueChange={(v) => setElFilter(v as 'all' | 'success' | 'failure')}>
+                                <SelectTrigger className="w-[140px]">
+                                    <SelectValue placeholder="Filter" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Calls</SelectItem>
+                                    <SelectItem value="success">Successful</SelectItem>
+                                    <SelectItem value="failure">Failed</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-sm text-muted-foreground">
+                                {elConversations.length} conversations
+                            </p>
+                        </div>
+                        <Button onClick={fetchElConversations} disabled={loading}>
+                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                            Load Conversations
+                        </Button>
+                    </div>
+
+                    {elConversations.length === 0 ? (
+                        <Card className="p-8">
+                            <div className="flex flex-col items-center justify-center text-center">
+                                <Mic className="h-12 w-12 text-muted-foreground mb-4" />
+                                <h4 className="font-medium">No conversations loaded</h4>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Click "Load Conversations" to fetch voice conversations from ElevenLabs
+                                </p>
+                            </div>
+                        </Card>
+                    ) : (
+                        <div className="grid gap-4">
+                            {elConversations.map((conv) => (
+                                <Card 
+                                    key={conv.conversation_id} 
+                                    className="cursor-pointer hover:shadow-md transition-shadow"
+                                    onClick={() => fetchElConversationDetail(conv.conversation_id)}
+                                >
+                                    <CardHeader className="pb-2">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                <Mic className="h-4 w-4 text-primary" />
+                                                {conv.agent_name || 'AI Agent'}
+                                            </CardTitle>
+                                            <div className="flex gap-2">
+                                                <Badge variant={conv.status === 'done' ? 'default' : 'secondary'}>
+                                                    {conv.status}
+                                                </Badge>
+                                                <Badge variant={conv.call_successful === 'success' ? 'default' : 'destructive'}>
+                                                    {conv.call_successful}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                            <span className="flex items-center">
+                                                <Clock className="mr-1 h-3 w-3" />
+                                                {formatDuration(conv.call_duration_secs)}
+                                            </span>
+                                            <span className="flex items-center">
+                                                <MessageSquare className="mr-1 h-3 w-3" />
+                                                {conv.message_count} messages
+                                            </span>
+                                            <span className="flex items-center">
+                                                <History className="mr-1 h-3 w-3" />
+                                                {new Date(conv.start_time_unix_secs * 1000).toLocaleString()}
+                                            </span>
+                                            <ChevronRight className="h-4 w-4 ml-auto" />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Twilio Content */}
+            {provider === 'twilio' && (
                 <Tabs defaultValue="conversations" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 lg:w-[300px]">
+                    <TabsList className="grid w-full grid-cols-3 lg:w-[450px]">
                         <TabsTrigger value="conversations">
-                            <MessageSquare className="mr-2 h-4 w-4" />
+                            <Phone className="mr-2 h-4 w-4" />
                             Conversations
                         </TabsTrigger>
-                        <TabsTrigger value="transcript">
+                        <TabsTrigger value="messages">
+                            <MessageSquare className="mr-2 h-4 w-4" />
+                            Messages
+                        </TabsTrigger>
+                        <TabsTrigger value="transcriptions">
                             <FileText className="mr-2 h-4 w-4" />
-                            Transcript
+                            Transcriptions
                         </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="conversations" className="space-y-4">
                         <div className="flex items-center justify-between">
                             <p className="text-sm text-muted-foreground">
-                                View ElevenLabs voice conversations with transcripts and summaries
+                                {twilioConversations.length} Twilio conversations (voice, WhatsApp, SMS)
                             </p>
-                            <Button onClick={fetchElConversations} disabled={loading}>
-                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                                Load Conversations
-                            </Button>
-                        </div>
-
-                        {elConversations.length === 0 ? (
-                            <Card className="p-8">
-                                <div className="flex flex-col items-center justify-center text-center">
-                                    <Mic className="h-12 w-12 text-muted-foreground mb-4" />
-                                    <h4 className="font-medium">No conversations loaded</h4>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        Click "Load Conversations" to fetch from ElevenLabs
-                                    </p>
-                                </div>
-                            </Card>
-                        ) : (
-                            <div className="grid gap-4">
-                                {elConversations.map((conv) => (
-                                    <Card 
-                                        key={conv.conversation_id} 
-                                        className="cursor-pointer hover:shadow-md transition-shadow"
-                                        onClick={() => fetchElConversationDetail(conv.conversation_id)}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <div className="flex items-center justify-between">
-                                                <CardTitle className="text-base">{conv.agent_name || 'AI Agent'}</CardTitle>
-                                                <div className="flex gap-2">
-                                                    <Badge variant={conv.status === 'done' ? 'default' : 'secondary'}>
-                                                        {conv.status}
-                                                    </Badge>
-                                                    <Badge variant={conv.call_successful === 'success' ? 'default' : 'destructive'}>
-                                                        {conv.call_successful}
-                                                    </Badge>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                                <span className="flex items-center">
-                                                    <Clock className="mr-1 h-3 w-3" />
-                                                    {formatDuration(conv.call_duration_secs)}
-                                                </span>
-                                                <span>{conv.message_count} messages</span>
-                                                <span>{new Date(conv.start_time_unix_secs * 1000).toLocaleDateString()}</span>
-                                                <ChevronRight className="h-4 w-4 ml-auto" />
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                    </TabsContent>
-
-                    <TabsContent value="transcript" className="space-y-4">
-                        {selectedElConversation ? (
-                            <div className="space-y-4">
-                                <Card>
-                                    <CardHeader>
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <CardTitle>Conversation Details</CardTitle>
-                                                <CardDescription>
-                                                    Duration: {formatDuration(selectedElConversation.metadata.call_duration_secs)} • 
-                                                    Status: {selectedElConversation.status}
-                                                </CardDescription>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Button size="sm" variant="outline" onClick={() => sendFeedback(selectedElConversation.conversation_id, 'like')}>
-                                                    <ThumbsUp className="h-4 w-4" />
-                                                </Button>
-                                                <Button size="sm" variant="outline" onClick={() => sendFeedback(selectedElConversation.conversation_id, 'dislike')}>
-                                                    <ThumbsDown className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-                                    {selectedElConversation.analysis?.transcript_summary && (
-                                        <CardContent>
-                                            <div className="bg-muted p-3 rounded-lg">
-                                                <p className="text-sm font-medium mb-1">Summary</p>
-                                                <p className="text-sm text-muted-foreground">{selectedElConversation.analysis.transcript_summary}</p>
-                                            </div>
-                                        </CardContent>
-                                    )}
-                                </Card>
-
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-base">Transcript</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        {selectedElConversation.transcript.map((item, i) => (
-                                            <div key={i} className={`flex gap-3 ${item.role === 'agent' ? 'flex-row-reverse' : ''}`}>
-                                                <div className={`h-8 w-8 rounded-full flex items-center justify-center ${item.role === 'agent' ? 'bg-primary/10' : 'bg-muted'}`}>
-                                                    {item.role === 'agent' ? <Mic className="h-4 w-4 text-primary" /> : <User className="h-4 w-4" />}
-                                                </div>
-                                                <div className={`flex-1 ${item.role === 'agent' ? 'text-right' : ''}`}>
-                                                    <div className={`inline-block p-3 rounded-lg max-w-[80%] ${item.role === 'agent' ? 'bg-primary/10' : 'bg-muted'}`}>
-                                                        <p className="text-sm">{item.message}</p>
-                                                    </div>
-                                                    <p className="text-xs text-muted-foreground mt-1">{formatDuration(item.time_in_call_secs)}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        ) : (
-                            <Card className="p-8">
-                                <div className="flex flex-col items-center justify-center text-center">
-                                    <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                                    <h4 className="font-medium">No conversation selected</h4>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        Select a conversation from the list to view its transcript
-                                    </p>
-                                </div>
-                            </Card>
-                        )}
-                    </TabsContent>
-                </Tabs>
-            )}
-
-            {/* Twilio Content */}
-            {provider === 'twilio' && (
-                <Tabs defaultValue="conversations" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
-                        <TabsTrigger value="conversations">Conversations</TabsTrigger>
-                        <TabsTrigger value="messages">Messages</TabsTrigger>
-                        <TabsTrigger value="transcriptions">Transcriptions</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="conversations" className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">View Twilio conversations (voice, WhatsApp, SMS)</p>
                             <Button onClick={fetchTwilioConversations} disabled={loading}>
                                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                                 Load Conversations
@@ -534,18 +736,24 @@ export default function ConversationsPage() {
                         ) : (
                             <div className="grid gap-4">
                                 {twilioConversations.map((conv) => (
-                                    <Card key={conv.sid} className="cursor-pointer hover:shadow-md transition-shadow"
-                                        onClick={() => { setServiceSid(conv.chat_service_sid); setChannelSid(conv.sid); }}>
+                                    <Card 
+                                        key={conv.sid} 
+                                        className={`cursor-pointer hover:shadow-md transition-shadow ${selectedTwilioConv?.sid === conv.sid ? 'ring-2 ring-primary' : ''}`}
+                                        onClick={() => selectTwilioConversation(conv)}
+                                    >
                                         <CardHeader className="pb-2">
                                             <div className="flex items-center justify-between">
-                                                <CardTitle className="text-base">{conv.friendly_name || conv.unique_name || conv.sid}</CardTitle>
+                                                <CardTitle className="text-base">{conv.friendly_name || conv.unique_name || 'Conversation'}</CardTitle>
                                                 <Badge variant={conv.state === 'active' ? 'default' : 'secondary'}>{conv.state}</Badge>
                                             </div>
                                             <CardDescription className="font-mono text-xs">SID: {conv.sid}</CardDescription>
                                         </CardHeader>
                                         <CardContent>
                                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                                <span className="flex items-center"><Clock className="mr-1 h-3 w-3" />{new Date(conv.date_created).toLocaleDateString()}</span>
+                                                <span className="flex items-center">
+                                                    <Clock className="mr-1 h-3 w-3" />
+                                                    {new Date(conv.date_created).toLocaleString()}
+                                                </span>
                                                 <ChevronRight className="h-4 w-4 ml-auto" />
                                             </div>
                                         </CardContent>
@@ -558,8 +766,12 @@ export default function ConversationsPage() {
                     <TabsContent value="messages" className="space-y-4">
                         <Card>
                             <CardHeader>
-                                <CardTitle className="text-base">Fetch Channel Messages</CardTitle>
-                                <CardDescription>Enter the Chat Service SID and Channel SID</CardDescription>
+                                <CardTitle className="text-base">Message History</CardTitle>
+                                <CardDescription>
+                                    {selectedTwilioConv 
+                                        ? `Viewing messages for: ${selectedTwilioConv.friendly_name || selectedTwilioConv.sid}`
+                                        : 'Select a conversation or enter SIDs manually'}
+                                </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -572,59 +784,74 @@ export default function ConversationsPage() {
                                         <Input placeholder="CHxxxxxxxx" value={channelSid} onChange={(e) => setChannelSid(e.target.value)} />
                                     </div>
                                 </div>
-                                <Button onClick={fetchTwilioMessages} disabled={loading}>
+                                <Button onClick={() => fetchTwilioMessages()} disabled={loading}>
                                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                                     Fetch Messages
                                 </Button>
                             </CardContent>
                         </Card>
+                        
                         {twilioMessages.length > 0 && (
-                            <div className="space-y-3">
-                                {twilioMessages.map((msg) => (
-                                    <Card key={msg.sid}>
-                                        <CardContent className="pt-4">
-                                            <div className="flex items-start gap-3">
-                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                                    <User className="h-4 w-4 text-primary" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-medium text-sm">{msg.from}</span>
-                                                        <span className="text-xs text-muted-foreground">{new Date(msg.date_created).toLocaleString()}</span>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-sm">{twilioMessages.length} Messages</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <ScrollArea className="h-[400px] pr-4">
+                                        <div className="space-y-3">
+                                            {twilioMessages.map((msg) => (
+                                                <div key={msg.sid} className="flex items-start gap-3">
+                                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                                        <User className="h-4 w-4 text-primary" />
                                                     </div>
-                                                    <p className="text-sm">{msg.body}</p>
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="font-medium text-sm">{msg.from}</span>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {new Date(msg.date_created).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <div className="bg-muted p-3 rounded-lg">
+                                                            <p className="text-sm">{msg.body}</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
                         )}
                     </TabsContent>
 
                     <TabsContent value="transcriptions" className="space-y-4">
                         <Card>
                             <CardHeader>
-                                <CardTitle className="text-base">Fetch Call Transcriptions</CardTitle>
-                                <CardDescription>Enter the Twilio Account SID and Recording SID</CardDescription>
+                                <CardTitle className="text-base">Call Transcriptions</CardTitle>
+                                <CardDescription>
+                                    Enter your Twilio Account SID and Recording SID to fetch call transcriptions
+                                </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label>Twilio Account SID</Label>
                                         <Input placeholder="ACxxxxxxxx" value={accountSid} onChange={(e) => setAccountSid(e.target.value)} />
+                                        <p className="text-xs text-muted-foreground">Find in Twilio Console → Account Info</p>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Recording SID</Label>
                                         <Input placeholder="RExxxxxxxx" value={recordingSid} onChange={(e) => setRecordingSid(e.target.value)} />
+                                        <p className="text-xs text-muted-foreground">Find in Twilio Console → Monitor → Recordings</p>
                                     </div>
                                 </div>
                                 <Button onClick={fetchTwilioTranscriptions} disabled={loading}>
-                                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
                                     Fetch Transcriptions
                                 </Button>
                             </CardContent>
                         </Card>
+                        
                         {twilioTranscriptions.length > 0 && (
                             <div className="space-y-3">
                                 {twilioTranscriptions.map((trans) => (
@@ -634,10 +861,14 @@ export default function ConversationsPage() {
                                                 <CardTitle className="text-sm font-mono">{trans.sid}</CardTitle>
                                                 <Badge variant={trans.status === 'completed' ? 'default' : 'secondary'}>{trans.status}</Badge>
                                             </div>
-                                            <CardDescription>Duration: {trans.duration}s</CardDescription>
+                                            <CardDescription>
+                                                Duration: {trans.duration}s • Created: {new Date(trans.date_created).toLocaleString()}
+                                            </CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <p className="text-sm bg-muted p-3 rounded-lg">{trans.transcription_text || 'No text available'}</p>
+                                            <div className="bg-muted p-4 rounded-lg">
+                                                <p className="text-sm whitespace-pre-wrap">{trans.transcription_text || 'No transcription text available'}</p>
+                                            </div>
                                         </CardContent>
                                     </Card>
                                 ))}
@@ -647,26 +878,52 @@ export default function ConversationsPage() {
                 </Tabs>
             )}
 
+            {/* ElevenLabs Conversation Detail Dialog */}
+            <ConversationDetailDialog
+                conversation={selectedElConversation}
+                onClose={() => {
+                    setSelectedElConversation(null);
+                    setElAudioUrl(undefined);
+                }}
+                onFeedback={sendFeedback}
+                audioUrl={elAudioUrl}
+            />
+
             {/* Configuration Dialog */}
             <Dialog open={isConfigOpen} onOpenChange={setIsConfigOpen}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Configure Pica Credentials</DialogTitle>
                         <DialogDescription>
-                            Enter your Pica API credentials from <a href="https://picaos.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">picaos.com</a>
+                            Enter your Pica API credentials from{' '}
+                            <a href="https://picaos.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                picaos.com
+                            </a>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label>Pica Secret Key (shared)</Label>
-                            <Input type="password" placeholder="Your Pica API secret key" value={picaSecretKey} onChange={(e) => setPicaSecretKey(e.target.value)} />
+                            <Input 
+                                type="password" 
+                                placeholder="Your Pica API secret key" 
+                                value={picaSecretKey} 
+                                onChange={(e) => setPicaSecretKey(e.target.value)} 
+                            />
                         </div>
                         
                         <div className="border-t pt-4">
-                            <p className="text-sm font-medium mb-3 flex items-center gap-2"><Mic className="h-4 w-4" /> ElevenLabs Connection</p>
+                            <p className="text-sm font-medium mb-3 flex items-center gap-2">
+                                <Mic className="h-4 w-4" /> ElevenLabs Connection
+                            </p>
                             <div className="space-y-2">
                                 <Label>ElevenLabs Connection Key</Label>
-                                <Input type="password" placeholder="Your ElevenLabs connection key" value={elConnectionKey} onChange={(e) => setElConnectionKey(e.target.value)} />
+                                <Input 
+                                    type="password" 
+                                    placeholder="Your ElevenLabs connection key" 
+                                    value={elConnectionKey} 
+                                    onChange={(e) => setElConnectionKey(e.target.value)} 
+                                />
                             </div>
                             <Button className="mt-2" size="sm" variant="outline" onClick={testElevenLabsConnection} disabled={loading}>
                                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
@@ -675,10 +932,17 @@ export default function ConversationsPage() {
                         </div>
 
                         <div className="border-t pt-4">
-                            <p className="text-sm font-medium mb-3 flex items-center gap-2"><Phone className="h-4 w-4" /> Twilio Connection</p>
+                            <p className="text-sm font-medium mb-3 flex items-center gap-2">
+                                <Phone className="h-4 w-4" /> Twilio Connection
+                            </p>
                             <div className="space-y-2">
                                 <Label>Twilio Connection Key</Label>
-                                <Input type="password" placeholder="Your Twilio connection key" value={twilioConnectionKey} onChange={(e) => setTwilioConnectionKey(e.target.value)} />
+                                <Input 
+                                    type="password" 
+                                    placeholder="Your Twilio connection key" 
+                                    value={twilioConnectionKey} 
+                                    onChange={(e) => setTwilioConnectionKey(e.target.value)} 
+                                />
                             </div>
                             <Button className="mt-2" size="sm" variant="outline" onClick={testTwilioConnection} disabled={loading}>
                                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
