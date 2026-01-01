@@ -2,14 +2,12 @@ import { NextResponse } from "next/server";
 import {
     listElevenLabsConversations,
     getElevenLabsConversation,
-    getElevenLabsConversationAudio,
     sendElevenLabsFeedback,
     PicaElevenLabsConfig,
 } from "@/lib/elevenlabs/pica-client";
 
 function getConfig(request: Request): PicaElevenLabsConfig {
     const url = new URL(request.url);
-    const action = url.searchParams.get('action');
     
     // For audio requests, also check query param since browser audio player can't send headers
     const apiKeyFromQuery = url.searchParams.get('apiKey');
@@ -102,7 +100,7 @@ export async function GET(request: Request) {
             }
             
             case 'audio-url': {
-                // Return a signed URL or check if audio is available
+                // Return the audio URL - we'll let the audio player handle errors
                 const conversationId = searchParams.get('id');
                 if (!conversationId) {
                     return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
@@ -113,25 +111,33 @@ export async function GET(request: Request) {
                     return NextResponse.json({ has_audio: false, error: 'API key required' });
                 }
                 
-                // Check if audio exists by making a HEAD request
+                // Instead of HEAD request (which ElevenLabs may not support), 
+                // try a GET request with Range header to check if audio exists
                 try {
                     const checkResponse = await fetch(
                         `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
                         {
-                            method: 'HEAD',
+                            method: 'GET',
                             headers: {
                                 'xi-api-key': apiKey,
+                                'Range': 'bytes=0-0', // Request just first byte to check availability
                             },
                         }
                     );
                     
+                    // 200 or 206 (partial content) means audio exists
+                    const hasAudio = checkResponse.ok || checkResponse.status === 206;
+                    
                     return NextResponse.json({ 
-                        has_audio: checkResponse.ok,
-                        // The audio URL will be fetched through our proxy
-                        audio_url: checkResponse.ok ? `/api/elevenlabs?action=audio&id=${conversationId}` : null,
+                        has_audio: hasAudio,
+                        audio_url: hasAudio ? `/api/elevenlabs?action=audio&id=${conversationId}` : null,
                     });
                 } catch {
-                    return NextResponse.json({ has_audio: false });
+                    // If check fails, still return the URL and let the player handle errors
+                    return NextResponse.json({ 
+                        has_audio: true,
+                        audio_url: `/api/elevenlabs?action=audio&id=${conversationId}`,
+                    });
                 }
             }
 

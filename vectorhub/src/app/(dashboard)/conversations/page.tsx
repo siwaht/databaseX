@@ -58,13 +58,18 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [volume, setVolume] = useState(1);
+    const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     const togglePlay = () => {
-        if (audioRef.current) {
+        if (audioRef.current && !error) {
             if (isPlaying) {
                 audioRef.current.pause();
             } else {
-                audioRef.current.play();
+                audioRef.current.play().catch(err => {
+                    setError('Failed to play audio');
+                    console.error('Audio play error:', err);
+                });
             }
             setIsPlaying(!isPlaying);
         }
@@ -79,7 +84,19 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
     const handleLoadedMetadata = () => {
         if (audioRef.current) {
             setDuration(audioRef.current.duration);
+            setIsLoading(false);
+            setError(null);
         }
+    };
+
+    const handleError = () => {
+        setError('Audio not available or failed to load');
+        setIsLoading(false);
+    };
+
+    const handleCanPlay = () => {
+        setIsLoading(false);
+        setError(null);
     };
 
     const handleSeek = (value: number[]) => {
@@ -102,6 +119,17 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    if (error) {
+        return (
+            <div className="bg-destructive/10 rounded-lg p-4">
+                <div className="flex items-center gap-2 text-destructive">
+                    <Volume2 className="h-4 w-4" />
+                    <span className="text-sm">{error}</span>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="bg-muted/50 rounded-lg p-4 space-y-3">
             <audio
@@ -110,11 +138,19 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onEnded={() => setIsPlaying(false)}
+                onError={handleError}
+                onCanPlay={handleCanPlay}
             />
             {title && <p className="text-sm font-medium">{title}</p>}
             <div className="flex items-center gap-3">
-                <Button size="icon" variant="outline" onClick={togglePlay}>
-                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                <Button size="icon" variant="outline" onClick={togglePlay} disabled={isLoading}>
+                    {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : isPlaying ? (
+                        <Pause className="h-4 w-4" />
+                    ) : (
+                        <Play className="h-4 w-4" />
+                    )}
                 </Button>
                 <div className="flex-1 space-y-1">
                     <Slider
@@ -123,10 +159,11 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
                         step={0.1}
                         onValueChange={handleSeek}
                         className="cursor-pointer"
+                        disabled={isLoading}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{formatTime(currentTime)}</span>
-                        <span>{formatTime(duration)}</span>
+                        <span>{isLoading ? '--:--' : formatTime(duration)}</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-2 w-24">
@@ -139,7 +176,7 @@ function AudioPlayer({ audioUrl, title }: { audioUrl: string; title?: string }) 
                         className="cursor-pointer"
                     />
                 </div>
-                <Button size="icon" variant="ghost" asChild>
+                <Button size="icon" variant="ghost" asChild disabled={isLoading}>
                     <a href={audioUrl} download>
                         <Download className="h-4 w-4" />
                     </a>
@@ -242,12 +279,14 @@ function ConversationDetailDialog({
                     {/* Audio Player */}
                     {audioUrl ? (
                         <AudioPlayer audioUrl={audioUrl} title="Call Recording" />
-                    ) : conversation.has_audio && onLoadAudio ? (
+                    ) : onLoadAudio ? (
                         <Card className="p-4">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Volume2 className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm">Call recording available</span>
+                                    <span className="text-sm">
+                                        {conversation.has_audio ? 'Call recording available' : 'Try loading call recording'}
+                                    </span>
                                 </div>
                                 <Button size="sm" variant="outline" onClick={onLoadAudio} disabled={loadingAudio}>
                                     {loadingAudio ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
@@ -520,17 +559,10 @@ export default function ConversationsPage() {
         }
         setLoadingAudio(true);
         try {
-            // Check if audio is available
-            const checkRes = await fetch(`/api/elevenlabs?action=audio-url&id=${selectedElConversation.conversation_id}&apiKey=${encodeURIComponent(elApiKey)}`);
-            const checkData = await checkRes.json();
-            
-            if (checkData.has_audio && checkData.audio_url) {
-                // Add API key to the audio URL for playback
-                setElAudioUrl(`${checkData.audio_url}&apiKey=${encodeURIComponent(elApiKey)}`);
-                toast.success('Audio loaded');
-            } else {
-                toast.error(checkData.error || 'Audio not available for this conversation');
-            }
+            // Set the audio URL directly - the AudioPlayer will handle errors gracefully
+            const audioUrl = `/api/elevenlabs?action=audio&id=${selectedElConversation.conversation_id}&apiKey=${encodeURIComponent(elApiKey)}`;
+            setElAudioUrl(audioUrl);
+            toast.success('Audio player loaded');
         } catch {
             toast.error('Failed to load audio');
         } finally {
