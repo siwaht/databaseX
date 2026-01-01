@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { email, password, name, role, permissions } = body;
+        const { email, password, name, role, permissions, granularPermissions } = body;
 
         if (!email || !password || !name) {
             return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
@@ -42,7 +42,8 @@ export async function POST(request: Request) {
             name,
             role: role || 'user',
             status: 'active',
-            permissions: permissions || []
+            permissions: permissions || [],
+            granularPermissions: granularPermissions || undefined
         });
 
         return NextResponse.json(newUser, { status: 201 });

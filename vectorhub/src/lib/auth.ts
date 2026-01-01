@@ -27,7 +27,7 @@ export const authOptions: NextAuthOptions = {
 
                 try {
                     const result = await pool.query(
-                        `SELECT id, email, password_hash as "passwordHash", name, role, status, permissions FROM users WHERE email = $1`,
+                        `SELECT id, email, password_hash as "passwordHash", name, role, status, permissions, granular_permissions as "granularPermissions" FROM users WHERE email = $1`,
                         [credentials.email]
                     );
 
@@ -57,7 +57,8 @@ export const authOptions: NextAuthOptions = {
                         email: user.email,
                         name: user.name,
                         role: user.role,
-                        permissions: user.permissions
+                        permissions: user.permissions,
+                        granularPermissions: user.granularPermissions
                     };
                 } catch (error) {
                     console.error("Auth error:", error);
@@ -72,6 +73,7 @@ export const authOptions: NextAuthOptions = {
                 token.role = user.role;
                 token.permissions = user.permissions;
                 token.id = user.id;
+                token.granularPermissions = user.granularPermissions;
             }
             return token;
         },
@@ -80,6 +82,7 @@ export const authOptions: NextAuthOptions = {
                 session.user.role = token.role;
                 session.user.permissions = token.permissions;
                 session.user.id = token.id;
+                session.user.granularPermissions = token.granularPermissions;
             }
             return session;
         }

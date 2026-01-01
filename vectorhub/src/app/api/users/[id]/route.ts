@@ -13,7 +13,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     try {
         const body = await request.json();
-        const { email, password, name, role, permissions, status } = body;
+        const { email, password, name, role, permissions, status, granularPermissions } = body;
 
         const updates: any = {};
         if (email) updates.email = email;
@@ -21,6 +21,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         if (role) updates.role = role;
         if (permissions) updates.permissions = permissions;
         if (status) updates.status = status;
+        if (granularPermissions !== undefined) updates.granularPermissions = granularPermissions;
         if (password) {
             updates.passwordHash = await bcrypt.hash(password, 10);
         }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useStore } from "@/store";
@@ -39,6 +40,9 @@ const itemVariants = {
 };
 
 export default function CollectionsPage() {
+    // Session for granular permissions
+    const { data: session } = useSession();
+    
     // Access store state and actions separately to avoid re-render loops
     const collections = useStore((state) => state.collections);
     const addCollection = useStore((state) => state.addCollection);
@@ -50,6 +54,19 @@ export default function CollectionsPage() {
     const getConnection = useStore((state) => state.getConnection);
 
     const activeConnection = activeConnectionId ? getConnection(activeConnectionId) : null;
+
+    // Filter collections based on granular permissions
+    const filteredCollections = useMemo(() => {
+        // Admins see all collections
+        if (session?.user?.role === 'admin') return collections;
+        
+        // If no granular permissions or empty allowedCollections, show all
+        const allowedCollections = session?.user?.granularPermissions?.allowedCollections;
+        if (!allowedCollections || allowedCollections.length === 0) return collections;
+        
+        // Filter to only allowed collections
+        return collections.filter(col => allowedCollections.includes(col.name));
+    }, [collections, session?.user?.role, session?.user?.granularPermissions?.allowedCollections]);
 
     const [isLoading, setIsLoading] = useState(true);
     const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -241,7 +258,7 @@ export default function CollectionsPage() {
                     className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
                     variants={containerVariants}
                 >
-                    {collections.map((collection) => (
+                    {filteredCollections.map((collection) => (
                         <motion.div key={collection.name} variants={itemVariants}>
                             <CollectionCard
                                 collection={collection}
@@ -251,7 +268,7 @@ export default function CollectionsPage() {
                             />
                         </motion.div>
                     ))}
-                    {collections.length === 0 && !activeConnectionId && (
+                    {filteredCollections.length === 0 && !activeConnectionId && (
                         <motion.div
                             variants={itemVariants}
                             className="col-span-full flex h-[450px] flex-col items-center justify-center rounded-lg border border-dashed text-center"
@@ -271,7 +288,7 @@ export default function CollectionsPage() {
                             </Link>
                         </motion.div>
                     )}
-                    {collections.length === 0 && activeConnectionId && (
+                    {filteredCollections.length === 0 && activeConnectionId && (
                         <motion.div
                             variants={itemVariants}
                             className="col-span-full flex h-[450px] flex-col items-center justify-center rounded-lg border border-dashed text-center"

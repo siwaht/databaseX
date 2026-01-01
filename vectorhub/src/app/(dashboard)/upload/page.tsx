@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { useStore } from "@/store";
 import { UploadZone } from "@/components/documents/UploadZone";
@@ -31,12 +31,28 @@ import { splitText } from "@/lib/chunking";
 
 
 export default function UploadPage() {
+    // Session for granular permissions
+    const { data: session } = useSession();
+    
     const connections = useStore((state) => state.connections);
     const collections = useStore((state) => state.collections);
     const addDocument = useStore((state) => state.addDocument);
     const setCollections = useStore((state) => state.setCollections);
     const uploadPreferences = useStore((state) => state.uploadPreferences);
     const setUploadPreferences = useStore((state) => state.setUploadPreferences);
+
+    // Filter collections based on granular permissions
+    const filteredCollections = useMemo(() => {
+        // Admins see all collections
+        if (session?.user?.role === 'admin') return collections;
+        
+        // If no granular permissions or empty allowedCollections, show all
+        const allowedCollections = session?.user?.granularPermissions?.allowedCollections;
+        if (!allowedCollections || allowedCollections.length === 0) return collections;
+        
+        // Filter to only allowed collections
+        return collections.filter(col => allowedCollections.includes(col.name));
+    }, [collections, session?.user?.role, session?.user?.granularPermissions?.allowedCollections]);
 
     // Use persisted preferences from store
     const selectedConnection = uploadPreferences.selectedConnection;
@@ -468,12 +484,12 @@ export default function UploadPage() {
                                         <SelectValue placeholder="Select collection" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {collections.length === 0 ? (
+                                        {filteredCollections.length === 0 ? (
                                             <SelectItem value="_empty" disabled>
                                                 No collections available
                                             </SelectItem>
                                         ) : (
-                                            collections.map((c) => (
+                                            filteredCollections.map((c) => (
                                                 <SelectItem key={c.name} value={c.name}>
                                                     {c.name}
                                                 </SelectItem>

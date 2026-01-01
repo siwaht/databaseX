@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import {
     MessageSquare,
     Phone,
@@ -13,8 +14,6 @@ import {
     Key,
     CheckCircle,
     Loader2,
-    ThumbsUp,
-    ThumbsDown,
     Play,
     Pause,
     Mic,
@@ -54,7 +53,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { TwilioConversation, TwilioMessage, TwilioTranscription } from "@/lib/twilio/pica-client";
-import { ElevenLabsConversation, ElevenLabsConversationDetail, ElevenLabsAgent } from "@/lib/elevenlabs/pica-client";
+import { ElevenLabsConversation, ElevenLabsConversationDetail } from "@/lib/elevenlabs/pica-client";
 
 // Audio Player Component with retry fallback
 function AudioPlayer({ 
@@ -134,7 +133,17 @@ function AudioPlayer({
         }
     };
 
-    const handleError = () => {
+    const handleError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+        const audioEl = e.currentTarget;
+        console.log('[AudioPlayer] Error event:', {
+            error: audioEl.error,
+            errorCode: audioEl.error?.code,
+            errorMessage: audioEl.error?.message,
+            src: audioEl.src?.substring(0, 50),
+            networkState: audioEl.networkState,
+            readyState: audioEl.readyState,
+        });
+        
         // Auto-retry on first few failures
         if (retryCount < maxRetries) {
             setTimeout(() => {
@@ -264,7 +273,6 @@ function AudioPlayer({
 function ConversationDetailDialog({
     conversation,
     onClose,
-    onFeedback,
     audioUrl,
     onLoadAudio,
     loadingAudio,
@@ -272,7 +280,6 @@ function ConversationDetailDialog({
 }: {
     conversation: ElevenLabsConversationDetail | null;
     onClose: () => void;
-    onFeedback: (id: string, feedback: 'like' | 'dislike') => void;
     audioUrl?: string;
     onLoadAudio?: () => void;
     loadingAudio?: boolean;
@@ -301,14 +308,6 @@ function ConversationDetailDialog({
                                 Status: {conversation.status} •
                                 {new Date(conversation.metadata.start_time_unix_secs * 1000).toLocaleString()}
                             </DialogDescription>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => onFeedback(conversation.conversation_id, 'like')}>
-                                <ThumbsUp className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => onFeedback(conversation.conversation_id, 'dislike')}>
-                                <ThumbsDown className="h-4 w-4" />
-                            </Button>
                         </div>
                     </div>
                 </DialogHeader>
@@ -439,6 +438,9 @@ function ConversationDetailDialog({
 }
 
 export default function ConversationsPage() {
+    // Session for granular permissions
+    const { data: session } = useSession();
+    
     // Main tab selection
     const [mainTab, setMainTab] = useState<'dashboard' | 'conversations'>('dashboard');
     
@@ -453,8 +455,6 @@ export default function ConversationsPage() {
     const [elConnectionKey, setElConnectionKey] = useState('');
     const [elApiKey, setElApiKey] = useState(''); // Direct ElevenLabs API key
     const [elFilter, setElFilter] = useState<'all' | 'success' | 'failure'>('all');
-    const [elAgents, setElAgents] = useState<ElevenLabsAgent[]>([]);
-    const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
     
     // Helper to clean up blob URLs to prevent memory leaks
     const cleanupAudioUrl = useCallback(() => {
@@ -489,7 +489,6 @@ export default function ConversationsPage() {
         const savedElConnection = localStorage.getItem('pica_elevenlabs_connection_key');
         const savedTwilioConnection = localStorage.getItem('pica_twilio_connection_key');
         const savedElApiKey = localStorage.getItem('elevenlabs_api_key');
-        const savedAgentId = localStorage.getItem('elevenlabs_selected_agent');
         
         if (savedSecret) setPicaSecretKey(savedSecret);
         if (savedElApiKey) {
@@ -503,9 +502,6 @@ export default function ConversationsPage() {
         if (savedTwilioConnection) {
             setTwilioConnectionKey(savedTwilioConnection);
             setIsTwilioConnected(true);
-        }
-        if (savedAgentId) {
-            setSelectedAgentId(savedAgentId);
         }
     }, []);
 
@@ -589,30 +585,6 @@ export default function ConversationsPage() {
     };
 
     // ElevenLabs functions
-    const fetchElAgents = async () => {
-        if (!elApiKey) return;
-        try {
-            const res = await fetch('/api/elevenlabs?action=agents', {
-                headers: {
-                    'x-elevenlabs-api-key': elApiKey,
-                },
-            });
-            const data = await res.json();
-            if (data.agents) {
-                setElAgents(data.agents);
-            }
-        } catch (error) {
-            console.error('Failed to fetch agents:', error);
-        }
-    };
-
-    // Fetch agents when API key is set
-    useEffect(() => {
-        if (elApiKey && isElConnected) {
-            fetchElAgents();
-        }
-    }, [elApiKey, isElConnected]);
-
     const fetchElConversations = async () => {
         if (!isElConnected) {
             toast.error('Please configure ElevenLabs credentials first');
@@ -624,9 +596,6 @@ export default function ConversationsPage() {
             let url = '/api/elevenlabs?action=conversations&page_size=50';
             if (elFilter !== 'all') {
                 url += `&call_successful=${elFilter}`;
-            }
-            if (selectedAgentId && selectedAgentId !== 'all') {
-                url += `&agent_id=${selectedAgentId}`;
             }
             const res = await fetch(url, {
                 headers: {
@@ -687,7 +656,6 @@ export default function ConversationsPage() {
         
         // Debug: Log all relevant state
         console.log('[Audio Debug] State:', {
-            selectedAgentId,
             conversationId: selectedElConversation.conversation_id,
             hasElApiKey: !!elApiKey,
             elApiKeyLength: elApiKey?.length,
@@ -793,31 +761,6 @@ export default function ConversationsPage() {
     const retryAudioWithAlternative = () => {
         setElAudioUrl(undefined);
         loadElAudio(true);
-    };
-
-    const sendFeedback = async (conversationId: string, feedback: 'like' | 'dislike') => {
-        try {
-            const res = await fetch('/api/elevenlabs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'feedback',
-                    secretKey: picaSecretKey,
-                    connectionKey: elConnectionKey,
-                    elevenLabsApiKey: elApiKey,
-                    conversationId,
-                    feedback,
-                }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                toast.success(`Feedback sent: ${feedback}`);
-            } else {
-                toast.error(data.error || 'Failed to send feedback');
-            }
-        } catch (error) {
-            toast.error('Failed to send feedback');
-        }
     };
 
     // Twilio functions
@@ -926,15 +869,28 @@ export default function ConversationsPage() {
 
     const isConnected = provider === 'elevenlabs' ? isElConnected : isTwilioConnected;
 
+    // Filter conversations based on granular permissions (allowed agents)
+    const filteredElConversations = useMemo(() => {
+        // Admins see all conversations
+        if (session?.user?.role === 'admin') return elConversations;
+        
+        // If no granular permissions or empty allowedAgents, show all
+        const allowedAgents = session?.user?.granularPermissions?.allowedAgents;
+        if (!allowedAgents || allowedAgents.length === 0) return elConversations;
+        
+        // Filter to only allowed agents' conversations
+        return elConversations.filter(conv => allowedAgents.includes(conv.agent_id));
+    }, [elConversations, session?.user?.role, session?.user?.granularPermissions?.allowedAgents]);
+
     // Calculate analytics from conversations
     const analytics = useMemo(() => {
-        const totalCalls = elConversations.length;
-        const successfulCalls = elConversations.filter(c => c.call_successful === 'success').length;
-        const failedCalls = elConversations.filter(c => c.call_successful === 'failure').length;
-        const unknownCalls = elConversations.filter(c => c.call_successful === 'unknown').length;
-        const totalDuration = elConversations.reduce((acc, c) => acc + c.call_duration_secs, 0);
+        const totalCalls = filteredElConversations.length;
+        const successfulCalls = filteredElConversations.filter(c => c.call_successful === 'success').length;
+        const failedCalls = filteredElConversations.filter(c => c.call_successful === 'failure').length;
+        const unknownCalls = filteredElConversations.filter(c => c.call_successful === 'unknown').length;
+        const totalDuration = filteredElConversations.reduce((acc, c) => acc + c.call_duration_secs, 0);
         const avgDuration = totalCalls > 0 ? totalDuration / totalCalls : 0;
-        const totalMessages = elConversations.reduce((acc, c) => acc + c.message_count, 0);
+        const totalMessages = filteredElConversations.reduce((acc, c) => acc + c.message_count, 0);
         const avgMessages = totalCalls > 0 ? totalMessages / totalCalls : 0;
         const successRate = totalCalls > 0 ? (successfulCalls / totalCalls) * 100 : 0;
         
@@ -952,7 +908,7 @@ export default function ConversationsPage() {
         const avgLLMCostPerMin = totalDuration > 0 ? totalLLMCost / (totalDuration / 60) : 0;
         
         // Group by agent with more details
-        const byAgent = elConversations.reduce((acc, c) => {
+        const byAgent = filteredElConversations.reduce((acc, c) => {
             const agentName = c.agent_name || 'Unknown Agent';
             const agentId = c.agent_id;
             if (!acc[agentId]) {
@@ -986,7 +942,7 @@ export default function ConversationsPage() {
         });
         
         const byDate = last30Days.map(date => {
-            const dayConvs = elConversations.filter(c => {
+            const dayConvs = filteredElConversations.filter(c => {
                 const convDate = new Date(c.start_time_unix_secs * 1000).toISOString().split('T')[0];
                 return convDate === date;
             });
@@ -1013,7 +969,7 @@ export default function ConversationsPage() {
         };
 
         // Peak hour analysis
-        const byHour = elConversations.reduce((acc, c) => {
+        const byHour = filteredElConversations.reduce((acc, c) => {
             const hour = new Date(c.start_time_unix_secs * 1000).getHours();
             acc[hour] = (acc[hour] || 0) + 1;
             return acc;
@@ -1049,7 +1005,7 @@ export default function ConversationsPage() {
             twilioTotal,
             twilioActive,
         };
-    }, [elConversations, twilioConversations]);
+    }, [filteredElConversations, twilioConversations]);
 
     return (
         <div className="space-y-6">
@@ -1409,25 +1365,6 @@ export default function ConversationsPage() {
                 <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-2">
-                            <Select 
-                                value={selectedAgentId} 
-                                onValueChange={(v) => {
-                                    setSelectedAgentId(v);
-                                    localStorage.setItem('elevenlabs_selected_agent', v);
-                                }}
-                            >
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Select Agent" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Agents</SelectItem>
-                                    {elAgents.map((agent) => (
-                                        <SelectItem key={agent.agent_id} value={agent.agent_id}>
-                                            {agent.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
                             <Select value={elFilter} onValueChange={(v) => setElFilter(v as 'all' | 'success' | 'failure')}>
                                 <SelectTrigger className="w-[140px]">
                                     <SelectValue placeholder="Filter" />
@@ -1439,7 +1376,7 @@ export default function ConversationsPage() {
                                 </SelectContent>
                             </Select>
                             <p className="text-sm text-muted-foreground">
-                                {elConversations.length} conversations
+                                {filteredElConversations.length} conversations
                             </p>
                         </div>
                         <Button onClick={fetchElConversations} disabled={loading}>
@@ -1448,7 +1385,7 @@ export default function ConversationsPage() {
                         </Button>
                     </div>
 
-                    {elConversations.length === 0 ? (
+                    {filteredElConversations.length === 0 ? (
                         <Card className="p-8">
                             <div className="flex flex-col items-center justify-center text-center">
                                 <Mic className="h-12 w-12 text-muted-foreground mb-4" />
@@ -1460,7 +1397,7 @@ export default function ConversationsPage() {
                         </Card>
                     ) : (
                         <div className="grid gap-4">
-                            {elConversations.map((conv) => (
+                            {filteredElConversations.map((conv) => (
                                 <Card 
                                     key={conv.conversation_id} 
                                     className="cursor-pointer hover:shadow-md transition-shadow"
@@ -1699,7 +1636,6 @@ export default function ConversationsPage() {
                     setElAudioUrl(undefined);
                     setAudioFetchMethod('proxy');
                 }}
-                onFeedback={sendFeedback}
                 audioUrl={elAudioUrl}
                 onLoadAudio={() => loadElAudio()}
                 loadingAudio={loadingAudio}

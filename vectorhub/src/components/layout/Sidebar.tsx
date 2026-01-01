@@ -61,10 +61,26 @@ export function SidebarContent({ className, onNavigate }: SidebarContentProps) {
         return pathname.startsWith(href);
     };
 
+    // Filter tabs based on granular permissions
+    const filterTabs = (items: typeof navItems) => {
+        // Admins see all tabs
+        if (user?.role === 'admin') return items;
+        
+        // If no granular permissions or empty allowedTabs, show all tabs
+        const allowedTabs = user?.granularPermissions?.allowedTabs;
+        if (!allowedTabs || allowedTabs.length === 0) return items;
+        
+        // Filter to only allowed tabs
+        return items.filter(item => allowedTabs.includes(item.href));
+    };
+
     const displayedNavItems = [...navItems];
     if (user?.role === 'admin') {
         displayedNavItems.splice(1, 0, { href: "/users", icon: Users, label: "Users" });
     }
+    
+    const filteredNavItems = filterTabs(displayedNavItems);
+    const filteredBottomNavItems = filterTabs(bottomNavItems);
 
     return (
         <div className={cn("flex h-full w-64 flex-col border-r bg-card/50 backdrop-blur-sm", className)}>
@@ -90,7 +106,7 @@ export function SidebarContent({ className, onNavigate }: SidebarContentProps) {
                         Main
                     </span>
                 </div>
-                {displayedNavItems.map((item) => {
+                {filteredNavItems.map((item) => {
                     const active = isActive(item.href);
                     return (
                         <Link key={item.href} href={item.href} onClick={onNavigate}>
@@ -133,7 +149,7 @@ export function SidebarContent({ className, onNavigate }: SidebarContentProps) {
                         System
                     </span>
                 </div>
-                {bottomNavItems.map((item) => {
+                {filteredBottomNavItems.map((item) => {
                     const active = isActive(item.href);
                     return (
                         <Link key={item.href} href={item.href} onClick={onNavigate}>

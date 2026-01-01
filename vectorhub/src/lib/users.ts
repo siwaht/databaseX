@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { User, UserSafe } from "@/types/user";
+import { User, UserSafe, GranularPermissions } from "@/types/user";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 
@@ -9,7 +9,7 @@ const pool = new Pool({
 
 export async function getAllUsers(): Promise<UserSafe[]> {
     const result = await pool.query(
-        `SELECT id, email, name, role, status, permissions, created_at as "createdAt", last_login as "lastLogin" FROM users`
+        `SELECT id, email, name, role, status, permissions, granular_permissions as "granularPermissions", created_at as "createdAt", last_login as "lastLogin" FROM users`
     );
     return result.rows.map(row => ({
         id: row.id,
@@ -18,6 +18,7 @@ export async function getAllUsers(): Promise<UserSafe[]> {
         role: row.role,
         status: row.status,
         permissions: row.permissions || [],
+        granularPermissions: row.granularPermissions || undefined,
         createdAt: row.createdAt,
         lastLogin: row.lastLogin
     }));
@@ -35,10 +36,10 @@ export async function createUser(data: Omit<User, "id" | "createdAt" | "lastLogi
 
     const id = randomUUID();
     const result = await pool.query(
-        `INSERT INTO users (id, email, password_hash, name, role, status, permissions, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-         RETURNING id, email, name, role, status, permissions, created_at as "createdAt", last_login as "lastLogin"`,
-        [id, data.email, data.passwordHash, data.name, data.role, data.status, data.permissions]
+        `INSERT INTO users (id, email, password_hash, name, role, status, permissions, granular_permissions, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+         RETURNING id, email, name, role, status, permissions, granular_permissions as "granularPermissions", created_at as "createdAt", last_login as "lastLogin"`,
+        [id, data.email, data.passwordHash, data.name, data.role, data.status, data.permissions, data.granularPermissions ? JSON.stringify(data.granularPermissions) : null]
     );
 
     return result.rows[0];
@@ -46,7 +47,7 @@ export async function createUser(data: Omit<User, "id" | "createdAt" | "lastLogi
 
 export async function updateUser(id: string, data: Partial<User>): Promise<void> {
     const updates: string[] = [];
-    const values: (string | string[] | Date | undefined)[] = [];
+    const values: any[] = [];
     let paramCount = 1;
 
     if (data.email !== undefined) {
@@ -73,6 +74,10 @@ export async function updateUser(id: string, data: Partial<User>): Promise<void>
         updates.push(`permissions = $${paramCount++}`);
         values.push(data.permissions);
     }
+    if (data.granularPermissions !== undefined) {
+        updates.push(`granular_permissions = $${paramCount++}`);
+        values.push(JSON.stringify(data.granularPermissions));
+    }
     if (data.lastLogin !== undefined) {
         updates.push(`last_login = $${paramCount++}`);
         values.push(data.lastLogin);
@@ -93,7 +98,7 @@ export async function deleteUser(id: string): Promise<void> {
 
 export async function getUserById(id: string): Promise<User | null> {
     const result = await pool.query(
-        `SELECT id, email, password_hash as "passwordHash", name, role, status, permissions, created_at as "createdAt", last_login as "lastLogin" FROM users WHERE id = $1`,
+        `SELECT id, email, password_hash as "passwordHash", name, role, status, permissions, granular_permissions as "granularPermissions", created_at as "createdAt", last_login as "lastLogin" FROM users WHERE id = $1`,
         [id]
     );
     return result.rows[0] || null;
@@ -101,7 +106,7 @@ export async function getUserById(id: string): Promise<User | null> {
 
 export async function getUserByEmail(email: string): Promise<User | null> {
     const result = await pool.query(
-        `SELECT id, email, password_hash as "passwordHash", name, role, status, permissions, created_at as "createdAt", last_login as "lastLogin" FROM users WHERE email = $1`,
+        `SELECT id, email, password_hash as "passwordHash", name, role, status, permissions, granular_permissions as "granularPermissions", created_at as "createdAt", last_login as "lastLogin" FROM users WHERE email = $1`,
         [email]
     );
     return result.rows[0] || null;

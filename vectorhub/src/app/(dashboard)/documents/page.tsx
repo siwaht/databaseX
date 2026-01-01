@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useStore } from "@/store";
@@ -36,6 +37,9 @@ const itemVariants = {
 };
 
 export default function DocumentsPage() {
+    // Session for granular permissions
+    const { data: session } = useSession();
+    
     // Access store state and actions
     const connections = useStore((state) => state.connections);
     const activeConnectionId = useStore((state) => state.activeConnectionId);
@@ -51,6 +55,19 @@ export default function DocumentsPage() {
     const [filterCollection, setFilterCollection] = useState<string>("all");
     const [isLoading, setIsLoading] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Filter collections based on granular permissions
+    const filteredCollections = useMemo(() => {
+        // Admins see all collections
+        if (session?.user?.role === 'admin') return collections;
+        
+        // If no granular permissions or empty allowedCollections, show all
+        const allowedCollections = session?.user?.granularPermissions?.allowedCollections;
+        if (!allowedCollections || allowedCollections.length === 0) return collections;
+        
+        // Filter to only allowed collections
+        return collections.filter(col => allowedCollections.includes(col));
+    }, [collections, session?.user?.role, session?.user?.granularPermissions?.allowedCollections]);
 
     // Auto-select first connection if none selected
     useEffect(() => {
@@ -284,7 +301,7 @@ export default function DocumentsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Collections</SelectItem>
-                                    {collections.map((col) => (
+                                    {filteredCollections.map((col) => (
                                         <SelectItem key={col} value={col}>
                                             {col}
                                         </SelectItem>
