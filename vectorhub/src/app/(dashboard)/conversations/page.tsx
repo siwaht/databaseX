@@ -685,6 +685,17 @@ export default function ConversationsPage() {
             return;
         }
         
+        // Debug: Log all relevant state
+        console.log('[Audio Debug] State:', {
+            selectedAgentId,
+            conversationId: selectedElConversation.conversation_id,
+            hasElApiKey: !!elApiKey,
+            elApiKeyLength: elApiKey?.length,
+            hasPicaSecret: !!picaSecretKey,
+            hasElConnectionKey: !!elConnectionKey,
+            useAlternative,
+        });
+        
         setLoadingAudio(true);
         cleanupAudioUrl();
         setElAudioUrl(undefined);
@@ -698,29 +709,36 @@ export default function ConversationsPage() {
         // Method 1: Direct ElevenLabs API (if API key available)
         if (elApiKey && !useAlternative) {
             try {
-                const response = await fetch(
-                    `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`
-                );
+                const url = `/api/elevenlabs?action=audio&id=${conversationId}&apiKey=${encodeURIComponent(elApiKey)}&t=${Date.now()}`;
+                console.log('[Audio] Trying direct API:', url.substring(0, 100) + '...');
+                
+                const response = await fetch(url);
+                console.log('[Audio] Direct API response:', response.status, response.headers.get('content-type'));
                 
                 const contentType = response.headers.get('content-type') || '';
                 
                 if (response.ok && !contentType.includes('application/json')) {
                     audioData = await response.arrayBuffer();
+                    console.log('[Audio] Direct API data size:', audioData.byteLength);
                     if (audioData.byteLength > 0) {
                         mimeType = contentType || 'audio/mpeg';
                         console.log('[Audio] Direct API succeeded:', audioData.byteLength, 'bytes');
                     } else {
                         audioData = null;
                     }
+                } else if (contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    console.log('[Audio] Direct API error:', errorData);
                 }
             } catch (e) {
-                console.log('[Audio] Direct API failed, trying Pica:', e);
+                console.log('[Audio] Direct API failed:', e);
             }
         }
         
         // Method 2: Pica passthrough (if direct failed or useAlternative)
         if (!audioData && picaSecretKey && elConnectionKey) {
             try {
+                console.log('[Audio] Trying Pica passthrough...');
                 const response = await fetch(
                     `/api/elevenlabs?action=audio&id=${conversationId}&t=${Date.now()}`,
                     {
@@ -730,17 +748,22 @@ export default function ConversationsPage() {
                         },
                     }
                 );
+                console.log('[Audio] Pica response:', response.status, response.headers.get('content-type'));
                 
                 const contentType = response.headers.get('content-type') || '';
                 
                 if (response.ok && !contentType.includes('application/json')) {
                     audioData = await response.arrayBuffer();
+                    console.log('[Audio] Pica data size:', audioData.byteLength);
                     if (audioData.byteLength > 0) {
                         mimeType = contentType || 'audio/mpeg';
                         console.log('[Audio] Pica passthrough succeeded:', audioData.byteLength, 'bytes');
                     } else {
                         audioData = null;
                     }
+                } else if (contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    console.log('[Audio] Pica error:', errorData);
                 }
             } catch (e) {
                 console.log('[Audio] Pica passthrough failed:', e);
@@ -748,6 +771,8 @@ export default function ConversationsPage() {
         }
         
         // Process result
+        console.log('[Audio] Final result:', { hasData: !!audioData, size: audioData?.byteLength, mimeType });
+        
         if (audioData && audioData.byteLength > 0) {
             if (!mimeType.startsWith('audio/')) {
                 mimeType = 'audio/mpeg';
