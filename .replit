@@ -42,4 +42,4 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-NEXTAUTH_SECRET = "Gcl3+D383bwFoKDb5g5ZI7j/jC7htAFf2LDFYXeWpmU="
+NEXTAUTH_SECRET = "Mq545S6TWu3xaxBB52sQ7ervnxkjeVfvJGfLDRAqS0o="

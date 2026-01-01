@@ -70,6 +70,9 @@ const nextConfig = {
         },
     },
 
+    // External packages for server components
+    serverExternalPackages: ["pdf-parse", "mammoth"],
+
     // Experimental features for better performance
     experimental: {
         // Enable optimized package imports
@@ -82,7 +85,6 @@ const nextConfig = {
             "@radix-ui/react-select",
             "@radix-ui/react-tabs",
         ],
-        serverComponentsExternalPackages: ["pdf-parse", "mammoth"],
     },
 };
 
