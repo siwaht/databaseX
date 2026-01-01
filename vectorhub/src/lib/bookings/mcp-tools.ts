@@ -661,7 +661,61 @@ export async function handleBookingToolCall(
                 const eventType = eventTypes.find((e) => e.id === args.eventTypeId);
 
                 if (!eventType) {
-                    return { success: false, error: `Event type not found: ${args.eventTypeId}` };
+                    // List available event types for helpful error message
+                    const activeEventTypes = eventTypes.filter(e => e.isActive);
+                    const availableTypes = activeEventTypes.map(e => `- ${e.name} (ID: ${e.id})`).join('\n');
+                    return { 
+                        success: false, 
+                        error: `Event type not found: ${args.eventTypeId}. Available event types:\n${availableTypes || 'No event types configured. Please create one first.'}` 
+                    };
+                }
+
+                // Check if event type is active
+                if (!eventType.isActive) {
+                    return { 
+                        success: false, 
+                        error: `Event type "${eventType.name}" is not active. Please choose an active event type.` 
+                    };
+                }
+
+                // Validate booking time against working hours
+                const startTime = new Date(args.startTime as string);
+                const settings = await getBookingSettings();
+                const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                const dayOfWeek = dayNames[startTime.getDay()];
+                const dayAvailability = settings.availability?.[dayOfWeek];
+
+                if (!dayAvailability) {
+                    const availableDays = Object.entries(settings.availability || {})
+                        .filter(([, v]) => v !== null)
+                        .map(([day, hours]) => `${day}: ${(hours as {start: string; end: string}).start} - ${(hours as {start: string; end: string}).end}`)
+                        .join(', ');
+                    return { 
+                        success: false, 
+                        error: `Bookings are not available on ${dayOfWeek}. Available days: ${availableDays || 'No working hours configured.'}` 
+                    };
+                }
+
+                // Check if time is within working hours
+                const bookingHour = startTime.getHours();
+                const bookingMinute = startTime.getMinutes();
+                const bookingTimeMinutes = bookingHour * 60 + bookingMinute;
+                
+                const [startHour, startMin] = dayAvailability.start.split(':').map(Number);
+                const [endHour, endMin] = dayAvailability.end.split(':').map(Number);
+                const workStartMinutes = startHour * 60 + startMin;
+                const workEndMinutes = endHour * 60 + endMin;
+
+                // Calculate end time to check if booking fits within working hours
+                const endTimeDate = new Date(startTime);
+                endTimeDate.setMinutes(endTimeDate.getMinutes() + eventType.duration);
+                const endTimeMinutes = endTimeDate.getHours() * 60 + endTimeDate.getMinutes();
+
+                if (bookingTimeMinutes < workStartMinutes || endTimeMinutes > workEndMinutes) {
+                    return { 
+                        success: false, 
+                        error: `Booking time is outside working hours. ${dayOfWeek} hours: ${dayAvailability.start} - ${dayAvailability.end}. Your booking: ${startTime.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false})} - ${endTimeDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false})}` 
+                    };
                 }
 
                 // Calculate end time if not provided
@@ -765,7 +819,61 @@ export async function handleBookingToolCall(
                 const eventType = eventTypes.find((e) => e.id === args.eventTypeId);
                 
                 if (!eventType) {
-                    return { success: false, error: `Event type not found: ${args.eventTypeId}` };
+                    // List available event types for helpful error message
+                    const activeEventTypes = eventTypes.filter(e => e.isActive);
+                    const availableTypes = activeEventTypes.map(e => `- ${e.name} (ID: ${e.id})`).join('\n');
+                    return { 
+                        success: false, 
+                        error: `Event type not found: ${args.eventTypeId}. Available event types:\n${availableTypes || 'No event types configured. Please create one first.'}` 
+                    };
+                }
+
+                // Check if event type is active
+                if (!eventType.isActive) {
+                    return { 
+                        success: false, 
+                        error: `Event type "${eventType.name}" is not active. Please choose an active event type.` 
+                    };
+                }
+
+                // Validate booking time against working hours
+                const startTime = new Date(args.startTime as string);
+                const settings = await getBookingSettings();
+                const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                const dayOfWeek = dayNames[startTime.getDay()];
+                const dayAvailability = settings.availability?.[dayOfWeek];
+
+                if (!dayAvailability) {
+                    const availableDays = Object.entries(settings.availability || {})
+                        .filter(([, v]) => v !== null)
+                        .map(([day, hours]) => `${day}: ${(hours as {start: string; end: string}).start} - ${(hours as {start: string; end: string}).end}`)
+                        .join(', ');
+                    return { 
+                        success: false, 
+                        error: `Bookings are not available on ${dayOfWeek}. Available days: ${availableDays || 'No working hours configured.'}` 
+                    };
+                }
+
+                // Check if time is within working hours
+                const bookingHour = startTime.getHours();
+                const bookingMinute = startTime.getMinutes();
+                const bookingTimeMinutes = bookingHour * 60 + bookingMinute;
+                
+                const [startHour, startMin] = dayAvailability.start.split(':').map(Number);
+                const [endHour, endMin] = dayAvailability.end.split(':').map(Number);
+                const workStartMinutes = startHour * 60 + startMin;
+                const workEndMinutes = endHour * 60 + endMin;
+
+                // Calculate end time to check if booking fits within working hours
+                const endTimeDate = new Date(startTime);
+                endTimeDate.setMinutes(endTimeDate.getMinutes() + eventType.duration);
+                const endTimeMinutes = endTimeDate.getHours() * 60 + endTimeDate.getMinutes();
+
+                if (bookingTimeMinutes < workStartMinutes || endTimeMinutes > workEndMinutes) {
+                    return { 
+                        success: false, 
+                        error: `Booking time is outside working hours. ${dayOfWeek} hours: ${dayAvailability.start} - ${dayAvailability.end}. Your booking: ${startTime.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false})} - ${endTimeDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false})}` 
+                    };
                 }
                 
                 // Calculate end time
