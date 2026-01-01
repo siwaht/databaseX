@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
     MessageSquare,
     Phone,
@@ -75,6 +75,19 @@ function AudioPlayer({
     const [isLoading, setIsLoading] = useState(true);
     const [retryCount, setRetryCount] = useState(0);
     const maxRetries = 2;
+
+    // Reset state when audioUrl changes
+    useEffect(() => {
+        setError(null);
+        setIsLoading(true);
+        setIsPlaying(false);
+        setCurrentTime(0);
+        setDuration(0);
+        setRetryCount(0);
+        if (audioRef.current) {
+            audioRef.current.load();
+        }
+    }, [audioUrl]);
 
     const handleRetry = () => {
         if (retryCount < maxRetries) {
@@ -342,6 +355,7 @@ function ConversationDetailDialog({
                     {/* Audio Player */}
                     {audioUrl ? (
                         <AudioPlayer 
+                            key={audioUrl}
                             audioUrl={audioUrl} 
                             title="Call Recording" 
                             onRetry={onRetryAudio}
@@ -441,6 +455,13 @@ export default function ConversationsPage() {
     const [elFilter, setElFilter] = useState<'all' | 'success' | 'failure'>('all');
     const [elAgents, setElAgents] = useState<ElevenLabsAgent[]>([]);
     const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
+    
+    // Helper to clean up blob URLs to prevent memory leaks
+    const cleanupAudioUrl = useCallback(() => {
+        if (elAudioUrl && elAudioUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(elAudioUrl);
+        }
+    }, [elAudioUrl]);
     
     // Twilio state
     const [twilioConversations, setTwilioConversations] = useState<TwilioConversation[]>([]);
@@ -664,6 +685,7 @@ export default function ConversationsPage() {
             return;
         }
         setLoadingAudio(true);
+        cleanupAudioUrl(); // Revoke previous blob URL
         setElAudioUrl(undefined); // Clear previous URL
         
         const conversationId = selectedElConversation.conversation_id;
@@ -689,13 +711,23 @@ export default function ConversationsPage() {
                 throw new Error(errorMsg);
             }
             
-            // It's audio data - create blob URL
-            const blob = await response.blob();
+            // It's audio data - create blob URL with proper MIME type
+            const audioData = await response.arrayBuffer();
             
-            if (blob.size === 0) {
+            if (audioData.byteLength === 0) {
                 throw new Error('Audio file is empty');
             }
             
+            // Use the content-type from response, fallback to audio/mpeg
+            let mimeType = contentType || 'audio/mpeg';
+            // Ensure valid audio MIME type
+            if (!mimeType.startsWith('audio/')) {
+                mimeType = 'audio/mpeg';
+            }
+            
+            console.log(`Audio loaded: ${audioData.byteLength} bytes, type: ${mimeType}`);
+            
+            const blob = new Blob([audioData], { type: mimeType });
             const blobUrl = URL.createObjectURL(blob);
             setElAudioUrl(blobUrl);
             setAudioFetchMethod('blob');
@@ -1617,6 +1649,7 @@ export default function ConversationsPage() {
                 conversation={selectedElConversation}
                 onClose={() => {
                     setSelectedElConversation(null);
+                    cleanupAudioUrl(); // Revoke blob URL
                     setElAudioUrl(undefined);
                     setAudioFetchMethod('proxy');
                 }}

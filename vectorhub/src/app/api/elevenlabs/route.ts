@@ -84,6 +84,7 @@ export async function GET(request: Request) {
                             {
                                 headers: {
                                     'xi-api-key': apiKey,
+                                    'Accept': 'audio/mpeg, audio/wav, audio/ogg, audio/*',
                                 },
                             }
                         );
@@ -97,30 +98,44 @@ export async function GET(request: Request) {
                                     { status: 404 }
                                 );
                             }
+                            // If 401/403, auth issue - don't retry
+                            if (audioResponse.status === 401 || audioResponse.status === 403) {
+                                return NextResponse.json(
+                                    { error: 'Invalid or expired API key' }, 
+                                    { status: audioResponse.status }
+                                );
+                            }
                             throw new Error(`Audio fetch failed: ${audioResponse.status} - ${errorText}`);
                         }
                         
                         // Get content type from response or default to audio/mpeg
-                        const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
-                        const contentLength = audioResponse.headers.get('content-length');
+                        let contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
+                        
+                        // Ensure we have a valid audio content type
+                        if (!contentType.startsWith('audio/')) {
+                            contentType = 'audio/mpeg';
+                        }
                         
                         // Return the audio as a stream with proper headers for browser playback
                         const audioBuffer = await audioResponse.arrayBuffer();
                         
+                        // Verify we got actual audio data
+                        if (audioBuffer.byteLength === 0) {
+                            throw new Error('Empty audio response');
+                        }
+                        
                         const headers: Record<string, string> = {
                             'Content-Type': contentType,
+                            'Content-Length': audioBuffer.byteLength.toString(),
                             'Accept-Ranges': 'bytes',
                             'Cache-Control': 'public, max-age=3600',
                             'Access-Control-Allow-Origin': '*',
                         };
                         
-                        if (contentLength) {
-                            headers['Content-Length'] = contentLength;
-                        }
-                        
                         return new NextResponse(audioBuffer, { headers });
                     } catch (error) {
                         lastError = error instanceof Error ? error : new Error('Unknown error');
+                        console.error(`Audio fetch attempt ${attempt + 1} failed:`, lastError.message);
                         // Wait before retry (exponential backoff)
                         if (attempt < 2) {
                             await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
