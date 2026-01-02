@@ -89,12 +89,25 @@ const nextConfig = {
 
     // Webpack configuration for Cloudflare Pages compatibility
     webpack: (config, { isServer, nextRuntime }) => {
-        if (isServer && nextRuntime === 'edge') {
-            // Provide polyfills or aliases for Node.js built-ins in Edge
+        // Fix for next-auth in Edge Runtime
+        if (isServer && nextRuntime === "edge") {
             config.resolve.alias = {
                 ...config.resolve.alias,
-                crypto: 'node:crypto',
+                // Alias 'crypto' to the Node.js built-in 'node:crypto'
+                crypto: "node:crypto",
+                stream: "node:stream",
+                buffer: "node:buffer",
             };
+
+            // Ensure these are treated as external (runtime-provided) modules
+            config.externals = [
+                ...config.externals,
+                {
+                    "node:crypto": "commonjs node:crypto",
+                    "node:stream": "commonjs node:stream",
+                    "node:buffer": "commonjs node:buffer",
+                }
+            ];
         }
         return config;
     },
