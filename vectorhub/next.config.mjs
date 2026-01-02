@@ -70,8 +70,8 @@ const nextConfig = {
         },
     },
 
-    // External packages for server components
-    serverExternalPackages: ["pdf-parse", "mammoth"],
+    // External packages for server components (NOT bundled for Edge)
+    serverExternalPackages: ["pdf-parse", "mammoth", "next-auth"],
 
     // Experimental features for better performance
     experimental: {
