@@ -5,7 +5,7 @@ import { generateEmbedding } from "@/lib/embeddings";
 import { searchMongoDBVectors, searchMongoDBText } from "@/lib/db/mongodb-utils";
 import type { SearchQuery, SearchResult } from "@/lib/db/adapters/base";
 
-export const runtime = 'edge';
+
 
 const EXPECTED_EMBEDDING_DIMENSIONS = 1536;
 

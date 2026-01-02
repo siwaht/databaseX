@@ -3,7 +3,7 @@ import { MongoClient } from "mongodb";
 import { MongoDBAtlasConfig } from "@/types/connections";
 import { logger } from "@/lib/logger";
 
-export const runtime = 'edge';
+
 
 export async function POST(request: Request) {
     try {

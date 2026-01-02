@@ -8,7 +8,7 @@ import {
 import type { CreateCollectionConfig, CollectionInfo } from "@/lib/db/adapters/base";
 import { logger } from "@/lib/logger";
 
-export const runtime = 'edge';
+
 
 interface MCPTool {
     name: string;

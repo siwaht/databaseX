@@ -3,7 +3,7 @@ import { VectorDBClient } from "@/lib/db/client";
 import { ConnectionConfig } from "@/types/connections";
 import { logger } from "@/lib/logger";
 
-export const runtime = 'edge';
+
 
 const getClient = (request: Request) => {
     const configHeader = request.headers.get("x-connection-config");
