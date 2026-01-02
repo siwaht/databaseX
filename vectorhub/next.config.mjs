@@ -86,6 +86,18 @@ const nextConfig = {
             "@radix-ui/react-tabs",
         ],
     },
+
+    // Webpack configuration for Cloudflare Pages compatibility
+    webpack: (config, { isServer, nextRuntime }) => {
+        if (isServer && nextRuntime === 'edge') {
+            // Provide polyfills or aliases for Node.js built-ins in Edge
+            config.resolve.alias = {
+                ...config.resolve.alias,
+                crypto: 'node:crypto',
+            };
+        }
+        return config;
+    },
 };
 
 export default nextConfig;

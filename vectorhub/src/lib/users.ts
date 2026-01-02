@@ -1,7 +1,6 @@
 import { Pool } from "pg";
 import { User, UserSafe, GranularPermissions } from "@/types/user";
 import bcrypt from "bcryptjs";
-import { randomUUID } from "crypto";
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -29,12 +28,12 @@ export async function createUser(data: Omit<User, "id" | "createdAt" | "lastLogi
         `SELECT id FROM users WHERE email = $1`,
         [data.email]
     );
-    
+
     if (existingResult.rows.length > 0) {
         throw new Error("User with this email already exists");
     }
 
-    const id = randomUUID();
+    const id = crypto.randomUUID();
     const result = await pool.query(
         `INSERT INTO users (id, email, password_hash, name, role, status, permissions, granular_permissions, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
