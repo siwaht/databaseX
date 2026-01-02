@@ -7,6 +7,8 @@ import { listWebhookConnections, getWebhookSecret } from "@/lib/webhooks/store";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { Booking } from "@/types/booking";
 
+export const runtime = 'edge';
+
 // Validation schema for creating a booking
 const createBookingSchema = z.object({
     eventTypeId: z.string().min(1, "Event type ID is required"),

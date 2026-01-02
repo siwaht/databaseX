@@ -6,6 +6,8 @@ import {
     listMcpConnections,
 } from "@/lib/mcp/store";
 
+export const runtime = 'edge';
+
 export async function GET() {
     try {
         const connections = await listMcpConnections();

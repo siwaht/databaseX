@@ -5,6 +5,8 @@ import { Lead } from "@/types/booking";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 
+export const runtime = 'edge';
+
 // Validation schema for creating a lead
 const createLeadSchema = z.object({
     name: z.string().min(1, "Name is required").max(100, "Name too long"),
@@ -117,14 +119,14 @@ export async function POST(request: Request) {
         // Check for duplicate email (optional - can be removed if duplicates are allowed)
         const existingLeads = await listLeads();
         const duplicateLead = existingLeads.find(
-            (l) => l.email.toLowerCase() === validated.email.toLowerCase() && 
-                   l.status !== "converted" && l.status !== "lost"
+            (l) => l.email.toLowerCase() === validated.email.toLowerCase() &&
+                l.status !== "converted" && l.status !== "lost"
         );
-        
+
         if (duplicateLead) {
             return NextResponse.json(
-                { 
-                    code: "DUPLICATE_LEAD", 
+                {
+                    code: "DUPLICATE_LEAD",
                     message: "A lead with this email already exists",
                     existingLeadId: duplicateLead.id,
                 },
@@ -153,7 +155,7 @@ export async function POST(request: Request) {
 
         const created = await createLead(newLead);
         logger.info(`Lead created: ${created.id} (${created.email})`);
-        
+
         return NextResponse.json(created, { status: 201 });
     } catch (error) {
         if (error instanceof z.ZodError) {

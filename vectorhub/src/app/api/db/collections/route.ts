@@ -3,6 +3,8 @@ import { MongoClient } from "mongodb";
 import { MongoDBAtlasConfig } from "@/types/connections";
 import { logger } from "@/lib/logger";
 
+export const runtime = 'edge';
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
@@ -10,7 +12,7 @@ export async function POST(request: Request) {
 
         if (type === "mongodb_atlas") {
             const mongoConfig = config as MongoDBAtlasConfig;
-            
+
             if (!mongoConfig.connectionString) {
                 return NextResponse.json(
                     { error: "Missing connection string" },
@@ -24,12 +26,12 @@ export async function POST(request: Request) {
 
             try {
                 await client.connect();
-                
+
                 // If database is specified, list collections from that database
                 if (mongoConfig.database) {
                     const db = client.db(mongoConfig.database);
                     const collections = await db.listCollections().toArray();
-                    
+
                     const collectionInfos = await Promise.all(
                         collections.map(async (col: { name: string }) => {
                             try {
@@ -54,13 +56,13 @@ export async function POST(request: Request) {
                     await client.close();
                     return NextResponse.json(collectionInfos);
                 }
-                
+
                 // If no database specified, list all databases
                 const adminDb = client.db().admin();
                 const dbList = await adminDb.listDatabases();
-                
+
                 await client.close();
-                
+
                 return NextResponse.json(
                     dbList.databases.map((d: { name: string }) => ({
                         name: d.name,
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
                     { status: 500 }
                 );
             } finally {
-                await client.close().catch(() => {});
+                await client.close().catch(() => { });
             }
         }
 

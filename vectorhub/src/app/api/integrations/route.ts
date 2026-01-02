@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const runtime = 'edge';
 import { logger } from "@/lib/logger";
 import { listIntegrations, createIntegration } from "@/lib/integrations/store";
 

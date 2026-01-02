@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
+export const runtime = 'nodejs';
+
 const ENV_PATH = path.join(process.cwd(), ".env");
 
 // Helper to read .env file
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
 
         // Map provider/type to standard env keys if possible
         let envKey = key;
-        
+
         // Provider name to env key mapping
         const providerToEnvKey: Record<string, string> = {
             openai: "OPENAI_API_KEY",
@@ -105,7 +107,7 @@ export async function POST(request: Request) {
             voyageai: "VOYAGEAI_API_KEY",
             jina: "JINA_API_KEY",
         };
-        
+
         // Check if key is a known provider name (case-insensitive)
         const lowerKey = key.toLowerCase();
         if (providerToEnvKey[lowerKey]) {

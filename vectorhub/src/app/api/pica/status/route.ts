@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { dynamicPicaConfig } from '@/lib/dynamic-env';
 
+export const runtime = 'edge';
+
 export async function GET() {
     return NextResponse.json({
         weaviate: !!dynamicPicaConfig.secretKey && !!dynamicPicaConfig.weaviateKey,

@@ -3,6 +3,8 @@ import { MongoClient } from "mongodb";
 import { MongoDBAtlasConfig } from "@/types/connections";
 import { logger } from "@/lib/logger";
 
+export const runtime = 'edge';
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
@@ -10,7 +12,7 @@ export async function POST(request: Request) {
 
         if (type === "mongodb_atlas") {
             const mongoConfig = config as MongoDBAtlasConfig;
-            
+
             if (!mongoConfig.connectionString) {
                 return NextResponse.json(
                     { success: false, message: "Missing connection string" },
@@ -25,11 +27,11 @@ export async function POST(request: Request) {
 
             try {
                 await client.connect();
-                
+
                 // Test by listing databases
                 const adminDb = client.db().admin();
                 const dbList = await adminDb.listDatabases();
-                
+
                 await client.close();
 
                 return NextResponse.json({
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
                     message: error instanceof Error ? error.message : "Connection failed",
                 });
             } finally {
-                await client.close().catch(() => {});
+                await client.close().catch(() => { });
             }
         }
 

@@ -7,6 +7,8 @@ import { generateEmbedding } from "@/lib/embeddings";
 import { searchMongoDBVectors, searchMongoDBText } from "@/lib/db/mongodb-utils";
 import { withRateLimit, RATE_LIMITS, createRateLimitResponse, addRateLimitHeaders } from "@/lib/rate-limit";
 
+export const runtime = 'edge';
+
 const EXPECTED_EMBEDDING_DIMENSIONS = 1536;
 
 // Get connection config from request headers

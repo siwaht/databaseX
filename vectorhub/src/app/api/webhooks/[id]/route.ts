@@ -8,6 +8,8 @@ import {
 } from "@/lib/webhooks/store";
 import { testWebhook } from "@/lib/webhooks/delivery";
 
+export const runtime = 'edge';
+
 interface RouteParams {
     params: Promise<{ id: string }>;
 }

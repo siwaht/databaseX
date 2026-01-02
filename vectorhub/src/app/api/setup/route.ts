@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createUser, getAllUsers } from "@/lib/users";
 import bcrypt from "bcryptjs";
 
+export const runtime = 'edge';
+
 export async function POST(request: Request) {
     try {
         const users = await getAllUsers();

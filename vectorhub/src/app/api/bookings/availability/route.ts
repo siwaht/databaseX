@@ -5,6 +5,8 @@ import { listBookings, listEventTypes, getBookingSettings } from "@/lib/bookings
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { generateTimeSlots } from "@/lib/bookings/utils";
 
+export const runtime = 'edge';
+
 const availabilitySchema = z.object({
     eventTypeId: z.string().min(1, "Event type ID is required"),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),

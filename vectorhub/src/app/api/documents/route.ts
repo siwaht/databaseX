@@ -12,6 +12,8 @@ import { generateEmbedding } from "@/lib/embeddings";
 import { splitText } from "@/lib/chunking";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
+export const runtime = 'edge';
+
 // Get connection config from request headers
 function getConnectionConfig(request: Request): ConnectionConfig | null {
     const configHeader = request.headers.get("x-connection-config");

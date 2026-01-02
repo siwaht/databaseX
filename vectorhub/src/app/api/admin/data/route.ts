@@ -7,6 +7,7 @@ import {
 } from "@/lib/bookings/store";
 import { listIntegrations, restoreIntegrations } from "@/lib/integrations/store";
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {

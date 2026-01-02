@@ -8,6 +8,8 @@ import {
     PicaConfig,
 } from "@/lib/twilio/pica-client";
 
+export const runtime = 'edge';
+
 // Get Pica config from environment or request
 function getPicaConfig(secretKey?: string, connectionKey?: string): PicaConfig {
     return {
@@ -19,7 +21,7 @@ function getPicaConfig(secretKey?: string, connectionKey?: string): PicaConfig {
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
-    
+
     // Allow passing keys via headers for flexibility
     const secretKey = request.headers.get('x-pica-secret') || undefined;
     const connectionKey = request.headers.get('x-pica-connection-key') || undefined;
@@ -129,10 +131,10 @@ export async function POST(request: Request) {
         }
 
         const config: PicaConfig = { secretKey, connectionKey };
-        
+
         // Test connection by listing conversations
         const data = await listConversations(config, 1);
-        
+
         return NextResponse.json({
             success: true,
             message: 'Connection successful',
@@ -140,9 +142,9 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         return NextResponse.json(
-            { 
-                success: false, 
-                error: error instanceof Error ? error.message : 'Connection failed' 
+            {
+                success: false,
+                error: error instanceof Error ? error.message : 'Connection failed'
             },
             { status: 400 }
         );

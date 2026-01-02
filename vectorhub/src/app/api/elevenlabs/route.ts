@@ -8,14 +8,16 @@ import {
     PicaElevenLabsConfig,
 } from "@/lib/elevenlabs/pica-client";
 
+export const runtime = 'edge';
+
 function getConfig(request: Request): PicaElevenLabsConfig {
     const url = new URL(request.url);
-    
+
     // For audio requests, also check query param since browser audio player can't send headers
     const apiKeyFromQuery = url.searchParams.get('apiKey');
     const secretKeyFromQuery = url.searchParams.get('secretKey');
     const connectionKeyFromQuery = url.searchParams.get('connectionKey');
-    
+
     return {
         secretKey: secretKeyFromQuery || request.headers.get('x-pica-secret') || process.env.PICA_SECRET_KEY || '',
         connectionKey: connectionKeyFromQuery || request.headers.get('x-pica-connection-key') || process.env.PICA_ELEVENLABS_CONNECTION_KEY || '',
@@ -31,7 +33,7 @@ export async function GET(request: Request) {
     // Check if we have either Pica or direct ElevenLabs credentials
     const hasPica = config.secretKey && config.connectionKey;
     const hasDirect = !!config.elevenLabsApiKey;
-    
+
     if (!hasPica && !hasDirect) {
         return NextResponse.json(
             { error: 'Credentials not configured. Provide either Pica keys or ElevenLabs API key.' },
@@ -46,7 +48,7 @@ export async function GET(request: Request) {
                 const agentId = searchParams.get('agent_id') || undefined;
                 const callSuccessful = searchParams.get('call_successful') as 'success' | 'failure' | 'unknown' | null;
                 const cursor = searchParams.get('cursor') || undefined;
-                
+
                 const data = await listElevenLabsConversations(config, {
                     page_size: pageSize,
                     agent_id: agentId,
@@ -70,7 +72,7 @@ export async function GET(request: Request) {
                 if (!conversationId) {
                     return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
                 }
-                
+
                 // Try direct ElevenLabs API first
                 if (config.elevenLabsApiKey) {
                     try {
@@ -82,11 +84,11 @@ export async function GET(request: Request) {
                                 },
                             }
                         );
-                        
+
                         if (audioResponse.ok) {
                             const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
                             const audioBuffer = await audioResponse.arrayBuffer();
-                            
+
                             if (audioBuffer.byteLength > 0) {
                                 return new NextResponse(audioBuffer, {
                                     headers: {
@@ -101,12 +103,12 @@ export async function GET(request: Request) {
                         console.log('[Audio] Direct API failed:', e);
                     }
                 }
-                
+
                 // Fallback to Pica passthrough
                 if (config.secretKey && config.connectionKey) {
                     try {
                         const audioResult = await getElevenLabsConversationAudio(config, conversationId);
-                        
+
                         if (audioResult.audio_data && audioResult.audio_data.byteLength > 0) {
                             return new NextResponse(audioResult.audio_data, {
                                 headers: {
@@ -116,13 +118,13 @@ export async function GET(request: Request) {
                                 },
                             });
                         }
-                        
+
                         if (audioResult.audio_url) {
                             const audioResponse = await fetch(audioResult.audio_url);
                             if (audioResponse.ok) {
                                 const audioBuffer = await audioResponse.arrayBuffer();
                                 const contentType = audioResponse.headers.get('content-type') || 'audio/mpeg';
-                                
+
                                 return new NextResponse(audioBuffer, {
                                     headers: {
                                         'Content-Type': contentType,
@@ -136,25 +138,25 @@ export async function GET(request: Request) {
                         console.log('[Audio] Pica passthrough failed:', e);
                     }
                 }
-                
+
                 return NextResponse.json(
                     { error: 'Audio not available for this conversation' },
                     { status: 404 }
                 );
             }
-            
+
             case 'audio-url': {
                 // Return the audio URL - we'll let the audio player handle errors
                 const conversationId = searchParams.get('id');
                 if (!conversationId) {
                     return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
                 }
-                
+
                 const apiKey = config.elevenLabsApiKey;
                 if (!apiKey) {
                     return NextResponse.json({ has_audio: false, error: 'API key required' });
                 }
-                
+
                 // Instead of HEAD request (which ElevenLabs may not support), 
                 // try a GET request with Range header to check if audio exists
                 try {
@@ -168,17 +170,17 @@ export async function GET(request: Request) {
                             },
                         }
                     );
-                    
+
                     // 200 or 206 (partial content) means audio exists
                     const hasAudio = checkResponse.ok || checkResponse.status === 206;
-                    
-                    return NextResponse.json({ 
+
+                    return NextResponse.json({
                         has_audio: hasAudio,
                         audio_url: hasAudio ? `/api/elevenlabs?action=audio&id=${conversationId}` : null,
                     });
                 } catch {
                     // If check fails, still return the URL and let the player handle errors
-                    return NextResponse.json({ 
+                    return NextResponse.json({
                         has_audio: true,
                         audio_url: `/api/elevenlabs?action=audio&id=${conversationId}`,
                     });
@@ -196,14 +198,14 @@ export async function GET(request: Request) {
                 if (!conversationId) {
                     return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
                 }
-                
+
                 const apiKey = config.elevenLabsApiKey;
                 const results: Record<string, unknown> = {
                     conversationId,
                     hasApiKey: !!apiKey,
                     hasPicaKeys: !!(config.secretKey && config.connectionKey),
                 };
-                
+
                 // Try direct API
                 if (apiKey) {
                     try {
@@ -211,22 +213,22 @@ export async function GET(request: Request) {
                         const resp = await fetch(url, {
                             headers: { 'xi-api-key': apiKey },
                         });
-                        
+
                         results.directApi = {
                             status: resp.status,
                             statusText: resp.statusText,
                             contentType: resp.headers.get('content-type'),
                             contentLength: resp.headers.get('content-length'),
                         };
-                        
+
                         if (resp.ok) {
                             const contentType = resp.headers.get('content-type') || '';
                             if (contentType.includes('application/json')) {
                                 results.directApiBody = await resp.json();
                             } else {
                                 const buffer = await resp.arrayBuffer();
-                                results.directApiBody = { 
-                                    type: 'binary', 
+                                results.directApiBody = {
+                                    type: 'binary',
                                     size: buffer.byteLength,
                                     first20Bytes: Array.from(new Uint8Array(buffer.slice(0, 20))),
                                 };
@@ -238,7 +240,7 @@ export async function GET(request: Request) {
                         results.directApiError = error instanceof Error ? error.message : 'Unknown error';
                     }
                 }
-                
+
                 // Try Pica
                 if (config.secretKey && config.connectionKey) {
                     try {
@@ -250,13 +252,13 @@ export async function GET(request: Request) {
                                 'x-pica-action-id': 'conn_mod_def::GCcb-cGKkqU::GhWURfavRkuy6xKx6kam6Q',
                             },
                         });
-                        
+
                         results.picaApi = {
                             status: resp.status,
                             statusText: resp.statusText,
                             contentType: resp.headers.get('content-type'),
                         };
-                        
+
                         if (resp.ok) {
                             const contentType = resp.headers.get('content-type') || '';
                             if (contentType.includes('application/json')) {
@@ -272,7 +274,7 @@ export async function GET(request: Request) {
                         results.picaApiError = error instanceof Error ? error.message : 'Unknown error';
                     }
                 }
-                
+
                 // Also get conversation details to check has_audio
                 try {
                     const convDetail = await getElevenLabsConversation(config, conversationId);
@@ -285,7 +287,7 @@ export async function GET(request: Request) {
                 } catch (error) {
                     results.conversationDetailError = error instanceof Error ? error.message : 'Unknown error';
                 }
-                
+
                 return NextResponse.json(results);
             }
 

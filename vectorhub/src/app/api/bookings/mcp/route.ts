@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { bookingMcpTools, handleBookingToolCall } from "@/lib/bookings/mcp-tools";
 
+export const runtime = 'edge';
+
 /**
  * MCP-compatible endpoint for AI agents to interact with the booking system
  * Supports JSON-RPC 2.0 protocol with SSE transport for n8n compatibility

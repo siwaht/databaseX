@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { getAllUsers, createUser } from "@/lib/users";
 import bcrypt from "bcryptjs";
 
+export const runtime = 'edge';
+
 export async function GET() {
     const session = await getServerSession(authOptions);
 

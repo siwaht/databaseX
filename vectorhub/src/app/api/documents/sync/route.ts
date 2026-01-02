@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { VectorDocument } from "@/lib/db/adapters/base";
 
+export const runtime = 'edge';
+
 interface SyncRequest {
     connectionId: string;
     collection: string;

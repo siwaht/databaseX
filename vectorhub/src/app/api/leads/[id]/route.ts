@@ -4,6 +4,8 @@ import { getLead, updateLead, deleteLead } from "@/lib/leads/store";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 
+export const runtime = 'edge';
+
 // Validation schema for updating a lead
 const updateLeadSchema = z.object({
     name: z.string().min(1).max(100).optional(),

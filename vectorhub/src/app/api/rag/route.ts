@@ -6,6 +6,8 @@ import { MongoClient } from "mongodb";
 import { generateEmbedding } from "@/lib/embeddings";
 import { OneShotMcpClient } from "@/lib/mcp/stdio";
 
+export const runtime = 'edge';
+
 // Lazy-initialize OpenAI client to avoid build-time errors
 let openaiClient: OpenAI | null = null;
 

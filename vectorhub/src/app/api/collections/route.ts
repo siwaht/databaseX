@@ -8,6 +8,8 @@ import {
 import type { CreateCollectionConfig, CollectionInfo } from "@/lib/db/adapters/base";
 import { logger } from "@/lib/logger";
 
+export const runtime = 'edge';
+
 interface MCPTool {
     name: string;
     description?: string;
@@ -18,14 +20,14 @@ interface MCPTool {
 async function listMCPTools(config: MCPConfig): Promise<{ tools: MCPTool[]; error?: string }> {
     // Extract the HTTP endpoint from config
     let endpoint: string | undefined;
-    
+
     // Check various URL fields
     if (config.url) endpoint = config.url;
     else if (config.webhookUrl) endpoint = config.webhookUrl;
-    
+
     // Extract from supergateway args if present
     if (!endpoint && config.args && Array.isArray(config.args)) {
-        const streamableIndex = config.args.findIndex((arg: string) => 
+        const streamableIndex = config.args.findIndex((arg: string) =>
             arg === "--streamableHttp" || arg === "--sse"
         );
         if (streamableIndex !== -1 && config.args[streamableIndex + 1]) {
@@ -33,18 +35,18 @@ async function listMCPTools(config: MCPConfig): Promise<{ tools: MCPTool[]; erro
         }
         // Also check for URLs directly in args
         if (!endpoint) {
-            const urlArg = config.args.find((arg: string) => 
+            const urlArg = config.args.find((arg: string) =>
                 arg.startsWith("http://") || arg.startsWith("https://")
             );
             if (urlArg) endpoint = urlArg;
         }
     }
-    
+
     if (!endpoint) {
         logger.warn("No MCP endpoint found in config");
         return { tools: [], error: "No endpoint configured" };
     }
-    
+
     // Extract auth header if present
     let authHeader: string | undefined;
     if (config.authToken) {
@@ -58,21 +60,21 @@ async function listMCPTools(config: MCPConfig): Promise<{ tools: MCPTool[]; erro
             }
         }
     }
-    
+
     try {
         logger.info(`Fetching MCP tools from: ${endpoint}`);
-        
+
         const headers: Record<string, string> = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         };
-        
+
         if (authHeader) {
-            headers["Authorization"] = authHeader.startsWith("Bearer ") 
-                ? authHeader 
+            headers["Authorization"] = authHeader.startsWith("Bearer ")
+                ? authHeader
                 : `Bearer ${authHeader}`;
         }
-        
+
         const response = await fetch(endpoint, {
             method: "POST",
             headers,
@@ -83,9 +85,9 @@ async function listMCPTools(config: MCPConfig): Promise<{ tools: MCPTool[]; erro
                 params: {},
             }),
         });
-        
+
         const text = await response.text();
-        
+
         // Parse SSE or JSON response
         let data;
         if (text.includes("data: ")) {
@@ -103,12 +105,12 @@ async function listMCPTools(config: MCPConfig): Promise<{ tools: MCPTool[]; erro
         } else {
             data = JSON.parse(text);
         }
-        
+
         if (data?.result?.tools) {
             logger.info(`Found ${data.result.tools.length} MCP tools`);
             return { tools: data.result.tools };
         }
-        
+
         return { tools: [], error: "No tools found in response" };
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
@@ -224,7 +226,7 @@ export async function GET(request: Request) {
         if (connectionConfig.type === "mcp") {
             const mcpConfig = connectionConfig.config as MCPConfig;
             const { tools, error } = await listMCPTools(mcpConfig);
-            
+
             if (tools.length > 0) {
                 // Return each tool as a "collection" with its description
                 return NextResponse.json(tools.map(tool => ({
@@ -236,7 +238,7 @@ export async function GET(request: Request) {
                     isTool: true,
                 })));
             }
-            
+
             // Fallback if no tools found
             return NextResponse.json([{
                 name: error ? `Error: ${error}` : "No MCP Tools found",

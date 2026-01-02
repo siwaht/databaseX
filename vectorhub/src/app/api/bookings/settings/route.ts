@@ -4,6 +4,8 @@ import { logger } from "@/lib/logger";
 import { getBookingSettings, saveBookingSettings } from "@/lib/bookings/store";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
+export const runtime = 'edge';
+
 // Validation schema for booking settings
 const timeSlotSchema = z.object({
     start: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),

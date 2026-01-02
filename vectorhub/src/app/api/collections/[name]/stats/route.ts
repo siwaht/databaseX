@@ -3,6 +3,8 @@ import { MongoClient } from "mongodb";
 import { ConnectionConfig, MongoDBAtlasConfig } from "@/types/connections";
 import { logger } from "@/lib/logger";
 
+export const runtime = 'edge';
+
 function getConnectionConfig(request: Request): ConnectionConfig {
     const configHeader = request.headers.get("x-connection-config");
     if (!configHeader) {
@@ -20,7 +22,7 @@ async function getMongoDBCollectionStats(config: MongoDBAtlasConfig, collectionN
 
         // Get collection stats
         const stats = await db.command({ collStats: collectionName });
-        
+
         // Get document count
         const count = await db.collection(collectionName).countDocuments();
 

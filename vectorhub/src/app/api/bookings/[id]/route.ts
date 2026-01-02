@@ -6,6 +6,8 @@ import { broadcastWebhook } from "@/lib/webhooks/delivery";
 import { listWebhookConnections, getWebhookSecret } from "@/lib/webhooks/store";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
+export const runtime = 'edge';
+
 // Validation schema for updating a booking
 const updateBookingSchema = z.object({
     status: z.enum(["pending", "confirmed", "cancelled", "completed"]).optional(),

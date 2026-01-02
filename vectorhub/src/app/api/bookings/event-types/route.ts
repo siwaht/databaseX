@@ -5,6 +5,8 @@ import { listEventTypes, createEventType, updateEventType, deleteEventType } fro
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { EventType } from "@/types/booking";
 
+export const runtime = 'edge';
+
 // Validation schemas
 const createEventTypeSchema = z.object({
     name: z.string().min(1, "Name is required").max(100),

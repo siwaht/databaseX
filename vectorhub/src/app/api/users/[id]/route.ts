@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { updateUser, deleteUser, getUserById } from "@/lib/users";
 import bcrypt from "bcryptjs";
 
+export const runtime = 'edge';
+
 export async function PUT(
     request: Request,
     { params }: { params: Promise<{ id: string }> }

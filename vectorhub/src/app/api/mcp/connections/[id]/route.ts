@@ -11,6 +11,8 @@ import {
     getStatusFromHealth,
 } from "@/lib/mcp/client";
 
+export const runtime = 'edge';
+
 interface RouteParams {
     params: Promise<{ id: string }>;
 }
