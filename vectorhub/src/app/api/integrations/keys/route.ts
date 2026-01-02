@@ -1,29 +1,49 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
-const ENV_PATH = path.join(process.cwd(), ".env");
+// We can't use 'fs' in the Edge runtime.
+// This route will only work in environments where 'fs' is available (like local dev).
+const isEdge = typeof process === 'undefined' || process.env.NEXT_RUNTIME === 'edge';
 
 // Helper to read .env file
-function readEnvFile(): Record<string, string> {
-    if (!fs.existsSync(ENV_PATH)) {
+async function readEnvFile(): Promise<Record<string, string>> {
+    if (isEdge) {
+        return {}; // Return empty or pull from Edge-compatible source if needed
+    }
+
+    try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const ENV_PATH = path.join(process.cwd(), ".env");
+
+        if (!fs.existsSync(ENV_PATH)) {
+            return {};
+        }
+        const content = fs.readFileSync(ENV_PATH, "utf-8");
+        const env: Record<string, string> = {};
+        content.split("\n").forEach((line) => {
+            const [key, ...value] = line.split("=");
+            if (key && value) {
+                env[key.trim()] = value.join("=").trim();
+            }
+        });
+        return env;
+    } catch {
         return {};
     }
-    const content = fs.readFileSync(ENV_PATH, "utf-8");
-    const env: Record<string, string> = {};
-    content.split("\n").forEach((line) => {
-        const [key, ...value] = line.split("=");
-        if (key && value) {
-            env[key.trim()] = value.join("=").trim();
-        }
-    });
-    return env;
 }
 
 // Helper to write .env file
-function writeEnvFile(env: Record<string, string>) {
+async function writeEnvFile(env: Record<string, string>) {
+    if (isEdge) {
+        throw new Error("File system operations are not supported in the Edge runtime.");
+    }
+
+    const fs = await import("fs");
+    const path = await import("path");
+    const ENV_PATH = path.join(process.cwd(), ".env");
+
     const content = Object.entries(env)
         .map(([key, value]) => `${key}=${value}`)
         .join("\n");
@@ -60,7 +80,7 @@ const KNOWN_KEYS: Record<string, { name: string; type: string; provider: string 
 
 export async function GET() {
     try {
-        const env = readEnvFile();
+        const env = await readEnvFile();
         const keys = Object.entries(env)
             .filter(([key]) => KNOWN_KEYS[key] || key.endsWith("_API_KEY") || key.endsWith("_KEY") || key.includes("KEY"))
             .map(([key, value]) => {
@@ -117,24 +137,24 @@ export async function POST(request: Request) {
             envKey = key.toUpperCase().replace(/\s+/g, "_") + "_API_KEY";
         }
 
-        const env = readEnvFile();
+        const env = await readEnvFile();
         env[envKey] = value;
-        writeEnvFile(env);
+        await writeEnvFile(env);
 
         return NextResponse.json({ success: true, key: envKey });
     } catch (error) {
-        return NextResponse.json({ error: "Failed to save key" }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to save key" }, { status: 500 });
     }
 }
 
 export async function DELETE(request: Request) {
     try {
         const { key } = await request.json();
-        const env = readEnvFile();
+        const env = await readEnvFile();
         delete env[key];
-        writeEnvFile(env);
+        await writeEnvFile(env);
         return NextResponse.json({ success: true });
     } catch (error) {
-        return NextResponse.json({ error: "Failed to delete key" }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to delete key" }, { status: 500 });
     }
 }

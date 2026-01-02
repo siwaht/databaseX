@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
+
+const isEdge = typeof process === 'undefined' || process.env.NEXT_RUNTIME === 'edge';
 
 export async function POST(request: Request) {
     try {
+        if (isEdge) {
+            // For now, return a informative error or implement a Web-standard alternative
+            return NextResponse.json(
+                { error: "PDF and DOCX parsing is currently only supported in Node.js environments. Please use local development or a Node.js-compatible backend." },
+                { status: 501 }
+            );
+        }
+
         // Dynamically import libraries to avoid build-time resolution issues
         // @ts-ignore
         const pdfParse = (await import("pdf-parse")).default;
